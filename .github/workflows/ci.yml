@@ -37,6 +37,9 @@ jobs:
       - name: Build debug APK
         run: ./gradlew --stacktrace :app:assembleDebug
 
+      - name: Build release APK (minified, signed with the dev key)
+        run: ./gradlew --stacktrace :app:assembleRelease
+
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
