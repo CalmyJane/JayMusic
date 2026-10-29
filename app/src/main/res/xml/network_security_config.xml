@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A home NAS is typically reached via plain http on the local network (http://192.168.x.x:5000)
+  and/or via https with a self-signed certificate. Therefore:
+  - cleartext http is allowed,
+  - certificates installed by the user (Settings > Security > Install certificate) are trusted.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
