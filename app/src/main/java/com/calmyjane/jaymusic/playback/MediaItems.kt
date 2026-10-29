@@ -1,11 +1,14 @@
 package com.calmyjane.jaymusic.playback
 
 import android.os.Bundle
+import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.util.UnstableApi
 import com.calmyjane.jaymusic.cache.TrackUri
 import com.calmyjane.jaymusic.data.TrackEntity
 
+@OptIn(UnstableApi::class)
 object MediaItems {
 
     private const val EXTRA_RATING = "jaymusic.rating"
