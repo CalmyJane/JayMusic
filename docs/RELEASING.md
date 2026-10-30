@@ -5,7 +5,7 @@ tests and Android lint and builds a signed, minified APK before anything is publ
 
 | Trigger | Result on the Releases page |
 | --- | --- |
-| Push to any branch | **Test build** `v0.1.0-test.<run>` (marked *Pre-release*). |
+| Push to any branch | **Test build** `v0.1.0-test.<run>` (run number zero-padded, e.g. `test.0012`) (marked *Pre-release*). |
 | Push a tag `v1.2.3` | **Final release** “JayMusic 1.2.3”, marked *Latest*, with generated release notes. |
 | Push a tag `v1.2.3-beta.1` | Pre-release “Test build 1.2.3-beta.1”. |
 | Actions › CI › *Run workflow* with a version | Final release of that version from the chosen branch. |

@@ -58,7 +58,8 @@ jobs:
             VERSION="$BASE-pr.$GITHUB_RUN_NUMBER"
             KIND=none
           else
-            VERSION="$BASE-test.$GITHUB_RUN_NUMBER"
+            # Zero-padded so GitHub lists test.0010 after test.0009 (it sorts tag names as text).
+            VERSION="$BASE-test.$(printf %04d "$GITHUB_RUN_NUMBER")"
             KIND=test
           fi
           if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
