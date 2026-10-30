@@ -6,6 +6,7 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.os.Build
 import android.util.Log
+import com.calmyjane.jaymusic.core.synology.QuickConnect
 import com.calmyjane.jaymusic.core.synology.Session
 import com.calmyjane.jaymusic.core.synology.SynologyClient
 import com.calmyjane.jaymusic.core.synology.SynologyException
@@ -16,6 +17,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,6 +31,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
+import java.io.IOException
 
 /**
  * Keeps a File Station session alive in the background.
@@ -55,6 +58,7 @@ class ServerConnection(
     }
 
     private val client = SynologyClient(http)
+    private val quickConnect = QuickConnect(http)
     private val _state = MutableStateFlow<State>(State.Connecting)
     val state: StateFlow<State> = _state.asStateFlow()
 
@@ -177,20 +181,23 @@ class ServerConnection(
     }
 
     /**
-     * Logs in on all configured addresses in parallel. The local address wins if it works, so at
-     * home songs come from the LAN even if the internet address is also reachable.
+     * Logs in on all candidate addresses in parallel and picks the best one that works:
+     * the home address before the internet address, LAN before internet before the QuickConnect
+     * relay. QuickConnect IDs are resolved to their addresses first.
      */
     private suspend fun login(config: AppSettings, password: String, otp: String?): Pair<Session, String> =
         coroutineScope {
             val deviceName = "JayMusic (${Build.MODEL})"
-            val attempts = config.serverUrls.map { url ->
+            val candidates = candidates(config)
+            val attempts = candidates.map { url ->
                 url to async {
                     runCatching {
                         client.login(url, config.username, password, deviceName, otp, config.deviceId)
                     }
                 }
             }
-            var firstError: Throwable? = null
+            var authError: SynologyException? = null
+            val failures = mutableListOf<String>()
             for ((url, attempt) in attempts) {
                 val result = attempt.await()
                 result.onSuccess { s ->
@@ -198,13 +205,45 @@ class ServerConnection(
                     return@coroutineScope s to url
                 }
                 val error = result.exceptionOrNull()
-                // Auth errors are the most useful to show; network errors of the LAN address are expected away from home.
-                if (firstError == null || (error is SynologyException && firstError !is SynologyException)) {
-                    firstError = error
+                Log.i(TAG, "Login via $url failed: $error")
+                if (error is SynologyException && authError == null) authError = error
+                failures += "${shortAddress(url)}: ${describe(error)}"
+            }
+            // Wrong password etc. is more useful than the network errors of unreachable addresses.
+            authError?.let { throw it }
+            throw IOException(failures.joinToString("\n").ifEmpty { "No server address configured" })
+        }
+
+    /** Turns the configured addresses into concrete URLs, resolving QuickConnect IDs. */
+    private suspend fun candidates(config: AppSettings): List<String> = coroutineScope {
+        config.serverUrls.map { input ->
+            async {
+                val id = QuickConnect.idFrom(input) ?: return@async listOf(input)
+                try {
+                    quickConnect.resolve(id).map { it.url }
+                } catch (e: IOException) {
+                    Log.i(TAG, "QuickConnect $id: $e")
+                    lastQuickConnectError = e.message
+                    // Maybe it was a plain LAN host name after all.
+                    listOf(input)
                 }
             }
-            throw firstError ?: IllegalStateException("No server address configured")
-        }
+        }.awaitAll().flatten().distinct()
+    }
+
+    @Volatile
+    private var lastQuickConnectError: String? = null
+
+    private fun describe(error: Throwable?): String = when (error) {
+        null -> "unknown error"
+        is java.net.UnknownHostException ->
+            lastQuickConnectError ?: "address not found"
+        is java.net.SocketTimeoutException, is java.net.ConnectException -> "not reachable"
+        is javax.net.ssl.SSLException -> "certificate not trusted"
+        else -> error.message ?: error.javaClass.simpleName
+    }
+
+    private fun shortAddress(url: String): String = url.removePrefix("https://").removePrefix("http://")
 
     fun hasNetwork(): Boolean {
         val caps = connectivity.getNetworkCapabilities(connectivity.activeNetwork) ?: return false

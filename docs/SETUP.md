@@ -20,13 +20,27 @@ JayMusic can use two addresses and picks the best one automatically:
 | Field | Example | Used |
 | --- | --- | --- |
 | Home address | `http://192.168.1.10:5000` | Tried first. Fast, no internet traffic. |
-| Internet address | `https://nas.example.com:5001` | When away from home. |
+| Internet address or QuickConnect ID | `myname` or `https://nas.example.com:5001` | When away from home. |
 
 Fill in at least one. Plain host names without `http://` are treated as `http://`.
 
-**QuickConnect IDs are not supported** (QuickConnect is a proprietary relay). Use DDNS
-(Control Panel › External Access › DDNS, e.g. `yourname.synology.me`) with port forwarding of
-port 5001, or a VPN such as Tailscale and the NAS's VPN address.
+### QuickConnect
+
+Enter just your QuickConnect ID (`myname`; `quickconnect.to/myname` and
+`myname.quickconnect.to` work too). QuickConnect must be enabled on the NAS
+(Control Panel › External Access › QuickConnect). JayMusic asks Synology's QuickConnect service
+for all addresses of your NAS and tries them in parallel:
+
+1. the NAS's LAN addresses (when you are at home),
+2. its direct internet addresses (if ports are forwarded),
+3. the QuickConnect relay (works without port forwarding, but is slower).
+
+The first one that works is used. The connection card in Settings shows which address that is;
+tap the card for the full error list if nothing works.
+
+Alternatives to QuickConnect: DDNS (Control Panel › External Access › DDNS, e.g.
+`yourname.synology.me`) with port forwarding of port 5001, or a VPN such as Tailscale and the
+NAS's VPN address.
 
 ## 3. HTTPS certificates
 
@@ -59,5 +73,6 @@ A background sync also runs every 12 hours (by default only on Wi‑Fi) to pick 
 | “Wrong user name or password” | Check the credentials; DSM blocks the IP after several failed attempts (Control Panel › Security › Protection › Allow/Block list). |
 | “File Station is not available” | Give the user permission for the File Station application. |
 | “No such file or directory” during sync | Check the music folder path; it starts with the shared folder name, e.g. `/music`, not `/volume1/music`. |
-| Offline although the NAS is up | Open the address in the phone's browser. For HTTPS check the certificate (see above). |
+| Offline although the NAS is up | Tap the connection card to see the error for every address tried. Open the address in the phone's browser. For HTTPS check the certificate (see above). |
+| “QuickConnect ID … not found” | Check the ID in Control Panel › External Access › QuickConnect and that QuickConnect is enabled. |
 | Songs show odd titles | Titles come from file names until a song is played or downloaded once; then its tags are used. |

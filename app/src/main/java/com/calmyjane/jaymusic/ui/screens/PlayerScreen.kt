@@ -94,7 +94,7 @@ private fun rememberArtwork(data: ByteArray?): ImageBitmap? = remember(data) {
 @Composable
 fun MiniPlayer(vm: MainViewModel, onOpen: () -> Unit) {
     val state by vm.player.state.collectAsStateWithLifecycle()
-    if (!state.hasMedia) return
+    // Always shown with the same height, also when nothing is playing, so the layout never jumps.
     val position = rememberPosition(vm, state)
     Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerHigh)) {
         LinearProgressIndicator(
@@ -103,20 +103,26 @@ fun MiniPlayer(vm: MainViewModel, onOpen: () -> Unit) {
             drawStopIndicator = {},
         )
         Row(
-            Modifier.fillMaxWidth().heightIn(min = 72.dp).clickable(onClick = onOpen).padding(start = 16.dp, end = 4.dp),
+            Modifier.fillMaxWidth().height(72.dp).clickable(enabled = state.hasMedia, onClick = onOpen)
+                .padding(start = 16.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text(state.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    state.artist,
+                    if (state.hasMedia) state.title else "Nothing playing",
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    if (state.hasMedia) state.artist else "Pick a song in your library",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            IconButton(onClick = vm.player::togglePlayPause, modifier = Modifier.size(56.dp)) {
+            IconButton(onClick = vm.player::togglePlayPause, enabled = state.hasMedia, modifier = Modifier.size(56.dp)) {
                 if (state.isBuffering) {
                     CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 3.dp)
                 } else {
@@ -127,7 +133,7 @@ fun MiniPlayer(vm: MainViewModel, onOpen: () -> Unit) {
                     )
                 }
             }
-            IconButton(onClick = vm.player::next, modifier = Modifier.size(56.dp)) {
+            IconButton(onClick = vm.player::next, enabled = state.hasMedia, modifier = Modifier.size(56.dp)) {
                 Icon(Icons.Filled.SkipNext, contentDescription = "Next", modifier = Modifier.size(36.dp))
             }
         }
@@ -184,6 +190,7 @@ fun PlayerScreen(vm: MainViewModel, onClose: () -> Unit) {
             state.title.ifEmpty { "Nothing playing" },
             style = MaterialTheme.typography.headlineMedium,
             textAlign = TextAlign.Center,
+            minLines = 2,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
@@ -196,10 +203,11 @@ fun PlayerScreen(vm: MainViewModel, onClose: () -> Unit) {
             overflow = TextOverflow.Ellipsis,
         )
 
-        if (track != null) {
-            RatingBar(track.rating, onRate = { vm.setRating(track.path, it) }, starSize = 44.dp, modifier = Modifier.padding(vertical = 8.dp))
-        } else {
-            Spacer(Modifier.height(60.dp))
+        // Fixed height so the controls below never move.
+        Box(Modifier.fillMaxWidth().height(72.dp), contentAlignment = Alignment.Center) {
+            if (track != null) {
+                RatingBar(track.rating, onRate = { vm.setRating(track.path, it) }, starSize = 44.dp)
+            }
         }
 
         val duration = state.durationMs.coerceAtLeast(1)

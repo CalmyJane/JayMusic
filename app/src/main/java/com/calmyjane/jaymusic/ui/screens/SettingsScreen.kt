@@ -95,8 +95,9 @@ fun SettingsScreen(vm: MainViewModel, contentPadding: PaddingValues, onOpenExclu
         )
         OutlinedTextField(
             value = remoteUrl, onValueChange = { remoteUrl = it },
-            label = { Text("Internet address") },
-            placeholder = { Text("https://nas.example.com:5001") },
+            label = { Text("Internet address or QuickConnect ID") },
+            placeholder = { Text("myname  or  https://nas.example.com:5001") },
+            supportingText = { Text("A QuickConnect ID works from anywhere, no port forwarding needed.") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             modifier = Modifier.fillMaxWidth(),
@@ -133,7 +134,7 @@ fun SettingsScreen(vm: MainViewModel, contentPadding: PaddingValues, onOpenExclu
 
         Section("Library")
         Text("$trackCount songs in library", style = MaterialTheme.typography.bodyLarge)
-        SyncStatusText(syncStatus)
+        SyncStatusText(syncStatus, settings.lastScanAt)
         OutlinedButton(onClick = vm::syncNow, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
             Icon(Icons.Filled.Sync, contentDescription = null)
             Spacer(Modifier.width(8.dp))
@@ -202,37 +203,70 @@ private fun Section(title: String) {
 @Composable
 private fun ConnectionCard(state: ServerConnection.State, onRetry: () -> Unit) {
     val (title, detail) = when (state) {
-        ServerConnection.State.NotConfigured -> "Not set up" to "Enter your NAS address and account below."
+        ServerConnection.State.NotConfigured -> "Not set up" to "Enter your NAS address or QuickConnect ID and your account below."
         ServerConnection.State.Connecting -> "Connecting…" to "Downloaded songs can be played meanwhile."
         is ServerConnection.State.Online -> "Connected" to state.address
-        is ServerConnection.State.Offline -> "Offline" to "${state.reason}. Playing downloaded songs; retrying automatically."
+        is ServerConnection.State.Offline -> "Offline" to state.reason
         ServerConnection.State.NeedsOtp -> "2-factor code needed" to "Enter the code from your authenticator app."
         is ServerConnection.State.LoginFailed -> "Login failed" to state.reason
     }
+    var showDetails by remember { mutableStateOf(false) }
+    // Fixed size whatever the state, so the form below does not jump. Tap for the full text.
     Row(
-        Modifier.fillMaxWidth().border(2.dp, MaterialTheme.colorScheme.onBackground, RoundedCornerShape(8.dp)).padding(16.dp),
+        Modifier.fillMaxWidth().height(120.dp)
+            .border(2.dp, MaterialTheme.colorScheme.onBackground, RoundedCornerShape(8.dp))
+            .clickable { showDetails = true }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleLarge)
-            Text(detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1)
+            Text(
+                detail,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
-        if (state !is ServerConnection.State.Online && state !is ServerConnection.State.NotConfigured) {
-            TextButton(onClick = onRetry) { Text("Retry") }
-        }
+        TextButton(
+            onClick = onRetry,
+            enabled = state !is ServerConnection.State.NotConfigured && state !is ServerConnection.State.Connecting,
+        ) { Text(if (state is ServerConnection.State.Online) "Reconnect" else "Retry") }
+    }
+    if (showDetails) {
+        AlertDialog(
+            onDismissRequest = { showDetails = false },
+            title = { Text(title) },
+            text = { Text(detail) },
+            confirmButton = { TextButton(onClick = { showDetails = false }) { Text("OK") } },
+        )
     }
 }
 
+/** Always two lines high, so the buttons below never move. */
 @Composable
-private fun SyncStatusText(status: SyncStatus) {
+private fun SyncStatusText(status: SyncStatus, lastScanAt: Long) {
     val text = when (status) {
-        SyncStatus.Idle -> return
+        SyncStatus.Idle -> if (lastScanAt > 0) {
+            "Last sync: " + java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT)
+                .format(java.util.Date(lastScanAt))
+        } else {
+            "Not synced yet"
+        }
         is SyncStatus.Scanning -> "Scanning NAS… ${status.folders} folders, ${status.tracks} songs"
         is SyncStatus.Downloading -> "Downloading best rated songs… ${status.done} done"
         is SyncStatus.Finished -> status.message
         is SyncStatus.Failed -> "Sync failed: ${status.message}"
     }
-    Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Text(
+        text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        minLines = 2,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+    )
 }
 
 @Composable

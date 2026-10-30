@@ -6,6 +6,14 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- QuickConnect IDs can be entered as internet address.
+- Tapping the connection card shows the error for every address tried.
+
+### Fixed
+- Layout no longer jumps: the mini player, the connection card, the sync status and the rating
+  row in the player always keep the same size.
+
 ## [0.1.0]
 
 ### Added

@@ -104,3 +104,12 @@ Navigation is a small state machine in `MainActivity` (tabs + pages + player ove
 | `SYNO.API.Auth` | `login` (POST), `logout` | Session (`session=FileStation`, `format=sid`), 2-factor and device token. |
 | `SYNO.FileStation.List` | `list`, `list_share` | Library scan (paginated, 1000 entries per page). |
 | `SYNO.FileStation.Download` | `download` | Streaming and downloading (supports HTTP range requests). |
+
+### QuickConnect
+
+`core/synology/QuickConnect` resolves a QuickConnect ID with the (undocumented) service used by
+Synology's own apps: `POST https://global.quickconnect.to/Serv.php` with the commands
+`get_server_info` (for the `dsm_https` and `dsm` services) and, if no relay is known,
+`request_tunnel` at the returned control host. Candidates are LAN addresses (including Synology's
+`*.direct.quickconnect.to` names), direct internet addresses and the relay. `ServerConnection`
+logs in on all candidates in parallel and uses the most preferred one that works.
