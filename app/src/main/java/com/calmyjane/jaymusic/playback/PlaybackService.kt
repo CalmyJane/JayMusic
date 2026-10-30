@@ -29,7 +29,6 @@ import androidx.media3.session.SessionResult
 import com.calmyjane.jaymusic.AppContainer
 import com.calmyjane.jaymusic.JayMusicApp
 import com.calmyjane.jaymusic.R
-import com.calmyjane.jaymusic.ui.LockScreenActivity
 import com.calmyjane.jaymusic.ui.MainActivity
 import androidx.core.content.ContextCompat
 import com.google.common.util.concurrent.Futures
@@ -112,22 +111,23 @@ class PlaybackService : MediaSessionService() {
         startTicker()
         ContextCompat.registerReceiver(
             this,
-            screenOffReceiver,
-            IntentFilter(Intent.ACTION_SCREEN_OFF),
+            screenReceiver,
+            IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_SCREEN_ON)
+            },
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
     }
 
-    /** Opens the big lock screen player when the screen turns off during playback. */
-    private val screenOffReceiver = object : BroadcastReceiver() {
+    /** Opens the big lock screen player when the screen turns off/on during playback. */
+    private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (!container.settings.state.value.lockScreenPlayer) return
             if (player.mediaItemCount == 0 || !player.playWhenReady) return
-            try {
-                startActivity(LockScreenActivity.intent(this@PlaybackService))
-            } catch (e: Exception) {
-                // Blocked by background start restrictions (permission not granted).
-                Log.i(TAG, "Lock screen player not started: $e")
+            when (intent.action) {
+                Intent.ACTION_SCREEN_OFF -> LockScreenLauncher.onScreenOff(this@PlaybackService)
+                Intent.ACTION_SCREEN_ON -> LockScreenLauncher.onScreenOn(this@PlaybackService)
             }
         }
     }
@@ -142,7 +142,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
-        unregisterReceiver(screenOffReceiver)
+        unregisterReceiver(screenReceiver)
         saveQueueNow()
         container.mediaCache.protectedPaths = emptySet()
         mediaSession?.run {

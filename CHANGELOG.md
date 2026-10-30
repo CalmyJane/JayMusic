@@ -7,8 +7,9 @@ All notable changes are documented here. The format follows
 ## [Unreleased]
 
 ### Added
-- Big full screen lock screen player (huge buttons, shuffle, rating), shown when the screen turns
-  off during playback. Android's own lock screen controls cannot be enlarged by apps.
+- Big full screen lock screen player (huge buttons, shuffle, rating), opened via a full screen
+  notification when the screen is turned on during playback; setup page with permission
+  checklist and preview. Android's own lock screen controls cannot be enlarged by apps.
 - QuickConnect IDs can be entered as internet address.
 - Tapping the connection card shows the error for every address tried.
 

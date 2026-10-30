@@ -9,11 +9,12 @@
 - **Mini player** (bottom): tap it to open the full screen player.
 - **Full screen player**: very large previous / play / next buttons, shuffle and repeat toggles
   (filled = on), seek bar and the song's rating.
-- **Big lock screen player**: when the screen turns off during playback, JayMusic shows its own
-  full screen player on the lock screen with huge previous / next / play-pause / shuffle buttons
-  and the rating. *Unlock* (or unlocking the phone normally) closes it. It needs the permission
-  *Display over other apps* once (Settings › Lock screen › Big lock screen player; Android only
-  lets apps open a screen in the background with it). It can be switched off there.
+- **Big lock screen player**: when you turn the screen on while music plays and the phone is
+  locked, JayMusic opens its own full screen player with huge previous / next / play-pause /
+  shuffle buttons and the rating. *Unlock* (or unlocking the phone normally) closes it.
+  Set it up in Settings › Lock screen › Big lock screen player: the page lists the permissions
+  Android requires (notifications and full screen notifications, like an alarm clock app; *display
+  over other apps* is optional and makes it appear a little faster) and has a *Preview* button.
 - **System media controls**: the notification and Android's own lock screen controls also offer
   previous, play/pause, next, shuffle and repeat. Their size is decided by Android and the phone
   manufacturer and cannot be changed by apps — hence the big player above.

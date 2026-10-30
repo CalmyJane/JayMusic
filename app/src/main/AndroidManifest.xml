@@ -9,6 +9,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Lets the lock screen player open when the screen turns off (background activity start). -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Opens the lock screen player via a full-screen notification, like an alarm clock. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
     <application
         android:name=".JayMusicApp"
@@ -37,6 +39,7 @@
             android:exported="false"
             android:launchMode="singleTask"
             android:showWhenLocked="true"
+            android:theme="@style/Theme.JayMusic"
             android:taskAffinity="com.calmyjane.jaymusic.lockscreen" />
 
         <service

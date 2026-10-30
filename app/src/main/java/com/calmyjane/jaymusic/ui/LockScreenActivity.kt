@@ -58,6 +58,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.calmyjane.jaymusic.appContainer
 import com.calmyjane.jaymusic.data.ThemeMode
+import com.calmyjane.jaymusic.playback.LockScreenLauncher
 import com.calmyjane.jaymusic.playback.PlayerConnection
 import com.calmyjane.jaymusic.playback.PlayerUiState
 import com.calmyjane.jaymusic.ui.components.RatingBar
@@ -85,6 +86,7 @@ class LockScreenActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         showOnLockScreen()
+        LockScreenLauncher.dismissNotification(this)
         enableEdgeToEdge(SystemBarStyle.dark(android.graphics.Color.BLACK), SystemBarStyle.dark(android.graphics.Color.BLACK))
 
         val container = applicationContext.appContainer
@@ -117,6 +119,16 @@ class LockScreenActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        isShowing = true
+    }
+
+    override fun onStop() {
+        isShowing = false
+        super.onStop()
+    }
+
     override fun onDestroy() {
         unregisterReceiver(unlockReceiver)
         player.release()
@@ -143,6 +155,11 @@ class LockScreenActivity : ComponentActivity() {
     }
 
     companion object {
+        /** True while the player is on screen, so it is not opened twice. */
+        @Volatile
+        var isShowing = false
+            private set
+
         fun intent(context: Context): Intent = Intent(context, LockScreenActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
     }

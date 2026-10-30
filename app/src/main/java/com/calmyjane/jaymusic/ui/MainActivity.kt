@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.calmyjane.jaymusic.ui.screens.ExclusionsScreen
 import com.calmyjane.jaymusic.ui.screens.LibraryScreen
+import com.calmyjane.jaymusic.ui.screens.LockScreenSettingsScreen
 import com.calmyjane.jaymusic.ui.screens.MiniPlayer
 import com.calmyjane.jaymusic.ui.screens.PlayerScreen
 import com.calmyjane.jaymusic.ui.screens.PlaylistDetailScreen
@@ -77,6 +78,7 @@ private sealed interface Page {
     data class Playlist(val id: Long) : Page
     data object Exclusions : Page
     data object Server : Page
+    data object LockScreen : Page
 }
 
 @Composable
@@ -129,6 +131,7 @@ private fun AppRoot(vm: MainViewModel) {
                 is Page.Playlist -> PlaylistDetailScreen(vm, p.id, padding, onBack = { page = null })
                 Page.Exclusions -> ExclusionsScreen(vm, padding, onBack = { page = null })
                 Page.Server -> ServerScreen(vm, padding, onBack = { page = null })
+                Page.LockScreen -> LockScreenSettingsScreen(vm, padding, onBack = { page = null })
                 null -> when (tab) {
                     Tab.LIBRARY -> LibraryScreen(vm, padding)
                     Tab.PLAYLISTS -> PlaylistsScreen(vm, padding, onOpen = { page = Page.Playlist(it) })
@@ -137,6 +140,7 @@ private fun AppRoot(vm: MainViewModel) {
                         padding,
                         onOpenServer = { page = Page.Server },
                         onOpenExclusions = { page = Page.Exclusions },
+                        onOpenLockScreen = { page = Page.LockScreen },
                     )
                 }
             }

@@ -1,8 +1,12 @@
 package com.calmyjane.jaymusic.ui.screens
 
+import android.Manifest
 import android.content.Intent
+import android.os.Build
 import android.net.Uri
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,9 +30,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.FolderOff
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Sync
@@ -69,8 +75,10 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.calmyjane.jaymusic.BuildConfig
 import com.calmyjane.jaymusic.data.ThemeMode
+import com.calmyjane.jaymusic.playback.LockScreenLauncher
 import com.calmyjane.jaymusic.remote.ServerConnection
 import com.calmyjane.jaymusic.sync.SyncStatus
+import com.calmyjane.jaymusic.ui.LockScreenActivity
 import com.calmyjane.jaymusic.ui.MainViewModel
 import com.calmyjane.jaymusic.ui.components.ConfirmDialog
 import com.calmyjane.jaymusic.ui.components.formatBytes
@@ -91,6 +99,7 @@ fun SettingsScreen(
     contentPadding: PaddingValues,
     onOpenServer: () -> Unit,
     onOpenExclusions: () -> Unit,
+    onOpenLockScreen: () -> Unit,
 ) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val connection by vm.connectionState.collectAsStateWithLifecycle()
@@ -99,8 +108,8 @@ fun SettingsScreen(
     val rules by vm.folderRules.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var confirmClear by remember { mutableStateOf(false) }
-    var canShowOnLockScreen by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { canShowOnLockScreen = Settings.canDrawOverlays(context) }
+    var lockReady by remember { mutableStateOf(LockScreenLauncher.requirements(context).ready) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { lockReady = LockScreenLauncher.requirements(context).ready }
 
     Column(Modifier.fillMaxSize().padding(contentPadding).verticalScroll(rememberScrollState())) {
         SectionHeader("Server")
@@ -149,34 +158,16 @@ fun SettingsScreen(
         )
 
         SectionHeader("Lock screen")
-        val lockOn = settings.lockScreenPlayer && canShowOnLockScreen
         SettingRow(
             icon = Icons.Filled.Lock,
             title = "Big lock screen player",
-            subtitle = if (canShowOnLockScreen) "Large buttons while the phone is locked" else "Tap to allow",
-            onClick = {
-                if (!canShowOnLockScreen) {
-                    vm.setLockScreenPlayer(true)
-                    context.startActivity(
-                        Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}")),
-                    )
-                } else {
-                    vm.setLockScreenPlayer(!settings.lockScreenPlayer)
-                }
+            subtitle = when {
+                !settings.lockScreenPlayer -> "Off"
+                lockReady -> "On"
+                else -> "Setup needed"
             },
-            trailing = {
-                Switch(
-                    checked = lockOn,
-                    onCheckedChange = { on ->
-                        if (on && !canShowOnLockScreen) {
-                            context.startActivity(
-                                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}")),
-                            )
-                        }
-                        vm.setLockScreenPlayer(on)
-                    },
-                )
-            },
+            onClick = onOpenLockScreen,
+            trailing = { Chevron() },
         )
 
         SectionHeader("Appearance")
@@ -291,6 +282,65 @@ fun ServerScreen(vm: MainViewModel, contentPadding: PaddingValues, onBack: () ->
             confirmButton = { TextButton(onClick = { showDetails = false }) { Text("OK") } },
         )
     }
+}
+
+/** Lock screen player: on/off, what Android still needs to allow, and a preview. */
+@Composable
+fun LockScreenSettingsScreen(vm: MainViewModel, contentPadding: PaddingValues, onBack: () -> Unit) {
+    val settings by vm.settings.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    var req by remember { mutableStateOf(LockScreenLauncher.requirements(context)) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { req = LockScreenLauncher.requirements(context) }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        req = LockScreenLauncher.requirements(context)
+    }
+
+    Column(Modifier.fillMaxSize().padding(contentPadding).verticalScroll(rememberScrollState())) {
+        PageHeader("Lock screen player", onBack)
+        SettingRow(
+            icon = Icons.Filled.Lock,
+            title = "Big lock screen player",
+            subtitle = if (settings.lockScreenPlayer) "Shown when you turn the screen on" else "Off",
+            onClick = { vm.setLockScreenPlayer(!settings.lockScreenPlayer) },
+            trailing = { Switch(checked = settings.lockScreenPlayer, onCheckedChange = vm::setLockScreenPlayer) },
+        )
+
+        SectionHeader("Permissions")
+        PermissionRow("Notifications", req.notifications) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                context.startActivity(
+                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName),
+                )
+            }
+        }
+        PermissionRow("Full screen notifications", req.fullScreen) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                context.startActivity(
+                    Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:${context.packageName}")),
+                )
+            }
+        }
+        PermissionRow("Display over other apps", req.overlay) {
+            context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}")))
+        }
+
+        Button(
+            onClick = { context.startActivity(LockScreenActivity.intent(context)) },
+            modifier = Modifier.fillMaxWidth().padding(16.dp).height(56.dp),
+        ) { Text("Preview") }
+    }
+}
+
+@Composable
+private fun PermissionRow(title: String, granted: Boolean, onGrant: () -> Unit) {
+    SettingRow(
+        icon = if (granted) Icons.Filled.CheckCircle else Icons.Filled.ErrorOutline,
+        title = title,
+        subtitle = if (granted) "Allowed" else "Tap to allow",
+        onClick = { if (!granted) onGrant() },
+    )
 }
 
 private fun connectionSummary(state: ServerConnection.State): String = when (state) {
