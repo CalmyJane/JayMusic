@@ -168,9 +168,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // Playback
 
-    fun play(tracks: List<TrackEntity>, startIndex: Int) = report(player.play(tracks, startIndex, shuffle = false))
+    fun play(tracks: List<TrackEntity>, startIndex: Int) = report(player.play(tracks, startIndex))
 
-    fun shuffle(tracks: List<TrackEntity>) = report(player.play(tracks, startIndex = -1, shuffle = true))
+    /** Plays the whole list: from the top, or from a random song when shuffle is on. */
+    fun playAll(tracks: List<TrackEntity>) =
+        report(player.play(tracks, startIndex = if (player.state.value.shuffle) -1 else 0))
+
+    fun toggleShuffle() = player.setShuffle(!player.state.value.shuffle)
 
     fun playNext(track: TrackEntity) {
         player.playNext(track)

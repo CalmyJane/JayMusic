@@ -117,7 +117,7 @@ fun PlaylistDetailScreen(vm: MainViewModel, playlistId: Long, contentPadding: Pa
             IconButton(onClick = { renaming = true }) { Icon(Icons.Filled.Edit, contentDescription = "Rename") }
             IconButton(onClick = { deleting = true }) { Icon(Icons.Filled.Delete, contentDescription = "Delete playlist") }
         }
-        PlayButtons(tracks.size, onPlay = { vm.play(tracks, 0) }, onShuffle = { vm.shuffle(tracks) })
+        PlayButtons(vm, tracks)
         LazyColumn(Modifier.fillMaxSize()) {
             itemsIndexed(entries, key = { _, e -> e.entryId }) { index, entry ->
                 TrackRow(

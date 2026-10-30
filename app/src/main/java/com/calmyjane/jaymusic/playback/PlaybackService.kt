@@ -10,6 +10,7 @@ import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
@@ -19,6 +20,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
 import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -100,7 +102,7 @@ class PlaybackService : MediaSessionService() {
             Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        mediaSession = MediaSession.Builder(this, player)
+        mediaSession = MediaSession.Builder(this, HistoryPlayer(player))
             .setSessionActivity(openApp)
             .setCallback(SessionCallback())
             .setMediaButtonPreferences(mediaButtons())
@@ -169,7 +171,72 @@ class PlaybackService : MediaSessionService() {
             .setDisplayName("Repeat")
             .setSessionCommand(SessionCommand(CMD_CYCLE_REPEAT, Bundle.EMPTY))
             .build()
-        return listOf(shuffleButton, repeatButton)
+        // Previous and next are pinned to their usual places so shuffle/repeat never replace them.
+        val previousButton = CommandButton.Builder(CommandButton.ICON_PREVIOUS)
+            .setDisplayName("Previous")
+            .setPlayerCommand(Player.COMMAND_SEEK_TO_PREVIOUS)
+            .setSlots(CommandButton.SLOT_BACK)
+            .build()
+        val nextButton = CommandButton.Builder(CommandButton.ICON_NEXT)
+            .setDisplayName("Next")
+            .setPlayerCommand(Player.COMMAND_SEEK_TO_NEXT)
+            .setSlots(CommandButton.SLOT_FORWARD)
+            .build()
+        return listOf(previousButton, nextButton, shuffleButton, repeatButton)
+    }
+
+    // Shuffle history
+
+    /** Songs actually played, most recent last, so "previous" in shuffle mode goes back in time. */
+    private val history = ArrayDeque<String>()
+
+    /** Song we are going back to; its transition must not be added to the history. */
+    private var backTarget: String? = null
+
+    /** Queue size and song the shuffle order was last built for. */
+    private var shuffledFor: Pair<Int, String?>? = null
+
+    /**
+     * Wraps the player for the media session (app, notification, lock screen, headset):
+     * "previous" in shuffle mode returns to the song that was really played before.
+     */
+    private inner class HistoryPlayer(player: Player) : ForwardingPlayer(player) {
+        override fun seekToPrevious() {
+            if (currentPosition > RESTART_THRESHOLD_MS || !goBackInHistory()) super.seekToPrevious()
+        }
+
+        override fun seekToPreviousMediaItem() {
+            if (!goBackInHistory()) super.seekToPreviousMediaItem()
+        }
+    }
+
+    private fun goBackInHistory(): Boolean {
+        if (!player.shuffleModeEnabled) return false
+        while (history.isNotEmpty()) {
+            val path = history.removeLast()
+            val index = (0 until player.mediaItemCount).firstOrNull { player.getMediaItemAt(it).mediaId == path } ?: continue
+            backTarget = path
+            player.seekTo(index, 0)
+            return true
+        }
+        return false
+    }
+
+    /**
+     * Builds a new random order that starts with the current song, so "next" is random among all
+     * other songs. Called when shuffle is switched on or a new list is started.
+     */
+    private fun reshuffleFromCurrent() {
+        val count = player.mediaItemCount
+        if (count < 2) return
+        val current = player.currentMediaItemIndex
+        val rest = (0 until count).filter { it != current }.shuffled()
+        val order = IntArray(count).also { array ->
+            array[0] = current
+            rest.forEachIndexed { i, index -> array[i + 1] = index }
+        }
+        player.setShuffleOrder(DefaultShuffleOrder(order, System.nanoTime()))
+        shuffledFor = count to player.currentMediaItem?.mediaId
     }
 
     private fun updateMediaButtons() {
@@ -234,6 +301,20 @@ class PlaybackService : MediaSessionService() {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             val path = mediaItem?.mediaId
             val previous = currentPath
+            if (previous != null && previous != path) {
+                if (backTarget == path) {
+                    backTarget = null
+                } else {
+                    history.addLast(previous)
+                    if (history.size > MAX_HISTORY) history.removeFirst()
+                }
+            }
+            // A new list was started: shuffle it from the chosen song.
+            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED && player.shuffleModeEnabled &&
+                shuffledFor != (player.mediaItemCount to path) && path != previous
+            ) {
+                reshuffleFromCurrent()
+            }
             if (path != previous || reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT) {
                 countedPath = null
             }
@@ -258,6 +339,8 @@ class PlaybackService : MediaSessionService() {
         }
 
         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+            // Switching shuffle on never changes the current song; only what comes next.
+            if (shuffleModeEnabled) reshuffleFromCurrent()
             updateMediaButtons()
             schedulePrefetch()
             saveQueueSoon()
@@ -506,5 +589,7 @@ class PlaybackService : MediaSessionService() {
         private const val TICK_MS = 5_000L
         private const val PLAY_COUNT_THRESHOLD_MS = 30_000L
         private const val MAX_CONSECUTIVE_ERRORS = 10
+        private const val MAX_HISTORY = 500
+        private const val RESTART_THRESHOLD_MS = 3_000L
     }
 }

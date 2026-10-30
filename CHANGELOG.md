@@ -13,6 +13,9 @@ All notable changes are documented here. The format follows
 - Tapping the connection card shows the error for every address tried.
 
 ### Changed
+- Shuffle is a pure on/off switch: it no longer starts a new song, and tapping a song no longer
+  turns it off. With shuffle on, *previous* returns to the songs actually played before.
+- Previous/next are pinned to their places in the system media controls.
 - Settings redesigned as a clean list of equally sized rows; server account on its own page.
 
 ### Fixed

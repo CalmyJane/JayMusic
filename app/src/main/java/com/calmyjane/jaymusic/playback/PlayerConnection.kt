@@ -120,12 +120,13 @@ class PlayerConnection(
     fun positionMs(): Long = controller?.currentPosition ?: 0
 
     /**
-     * Plays [tracks] starting at [startIndex]. When offline, songs that are not on the phone are
-     * left out, so playback starts instantly with what is available.
+     * Plays [tracks] starting at [startIndex] (a random song if it is negative). The shuffle mode
+     * is not changed: with shuffle on, the songs after the first one come in random order.
+     * When offline, songs that are not on the phone are left out, so playback starts instantly
+     * with what is available.
      */
-    fun play(tracks: List<TrackEntity>, startIndex: Int = 0, shuffle: Boolean? = null): PlayResult {
+    fun play(tracks: List<TrackEntity>, startIndex: Int = 0): PlayResult {
         if (tracks.isEmpty()) return PlayResult.NothingAvailable
-        val start = tracks.getOrNull(startIndex) ?: tracks.first()
         val (playable, skipped) = if (connection.isOnline) {
             tracks to 0
         } else {
@@ -133,16 +134,11 @@ class PlayerConnection(
             available to (tracks.size - available.size)
         }
         if (playable.isEmpty()) return PlayResult.NothingAvailable
-        val index = playable.indexOfFirst { it.path == start.path }
+        val start = tracks.getOrNull(startIndex)
+        val index = if (start == null) playable.indices.random() else playable.indexOfFirst { it.path == start.path }.coerceAtLeast(0)
         val items = playable.map(MediaItems::from)
         withController { c ->
-            shuffle?.let { c.shuffleModeEnabled = it }
-            if (shuffle == true && startIndex < 0) {
-                // "Shuffle all": start with a random song.
-                c.setMediaItems(items, items.indices.random(), 0)
-            } else {
-                c.setMediaItems(items, index.coerceAtLeast(0), 0)
-            }
+            c.setMediaItems(items, index, 0)
             c.prepare()
             c.play()
         }

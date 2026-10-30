@@ -18,6 +18,11 @@
   previous, play/pause, next, shuffle and repeat. Their size is decided by Android and the phone
   manufacturer and cannot be changed by apps — hence the big player above.
 
+**Shuffle** is a switch: it never changes the song that is playing, it only decides whether the
+*next* song is random. With shuffle on, *previous* goes back to the song you actually heard
+before (also several steps back), and *next* continues with random songs. *Play* starts a list
+from the top, or from a random song when shuffle is on.
+
 Long-press a song (or tap ⋮) for: rate, play next, add to queue, add to playlist.
 
 ## Ratings

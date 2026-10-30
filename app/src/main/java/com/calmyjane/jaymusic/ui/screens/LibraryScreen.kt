@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -112,11 +113,7 @@ private fun SongsList(vm: MainViewModel) {
                 )
             }
         }
-        PlayButtons(
-            count = songs.size,
-            onPlay = { vm.play(songs, 0) },
-            onShuffle = { vm.shuffle(songs) },
-        )
+        PlayButtons(vm, songs)
         if (allCount == 0) {
             EmptyHint("No songs yet. Set up your Synology in Settings, then tap “Sync now”.")
         } else {
@@ -125,26 +122,37 @@ private fun SongsList(vm: MainViewModel) {
     }
 }
 
+/** "Play" plus the shuffle switch. Shuffle only decides whether the next song is random. */
 @Composable
-fun PlayButtons(count: Int, onPlay: () -> Unit, onShuffle: () -> Unit) {
+fun PlayButtons(vm: MainViewModel, tracks: List<TrackEntity>) {
+    val shuffle = vm.player.state.collectAsStateWithLifecycle().value.shuffle
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Button(onClick = onPlay, enabled = count > 0, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) {
+        Button(
+            onClick = { vm.playAll(tracks) },
+            enabled = tracks.isNotEmpty(),
+            modifier = Modifier.weight(1f).height(52.dp),
+        ) {
             Icon(Icons.Filled.PlayArrow, contentDescription = null)
             Spacer(Modifier.width(8.dp))
             Text("Play")
         }
-        OutlinedButton(onClick = onShuffle, enabled = count > 0, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) {
+        val shuffleContent: @Composable () -> Unit = {
             Icon(Icons.Filled.Shuffle, contentDescription = null)
             Spacer(Modifier.width(8.dp))
-            Text("Shuffle")
+            Text(if (shuffle) "Shuffle on" else "Shuffle off")
+        }
+        if (shuffle) {
+            Button(onClick = vm::toggleShuffle, modifier = Modifier.weight(1f).height(52.dp)) { shuffleContent() }
+        } else {
+            OutlinedButton(onClick = vm::toggleShuffle, modifier = Modifier.weight(1f).height(52.dp)) { shuffleContent() }
         }
     }
     Text(
-        "$count songs",
+        "${tracks.size} songs",
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -246,7 +254,7 @@ private fun FolderBrowser(vm: MainViewModel) {
                     }
                 }
                 if (songs.isNotEmpty()) {
-                    PlayButtons(songs.size, onPlay = { vm.play(songs, 0) }, onShuffle = { vm.shuffle(songs) })
+                    PlayButtons(vm, songs)
                 }
             }
         })
