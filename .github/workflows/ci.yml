@@ -90,10 +90,10 @@ jobs:
           fi
 
       - name: Unit tests
-        run: ./gradlew --stacktrace :core:test :app:testDebugUnitTest
+        run: ./gradlew :core:test :app:testDebugUnitTest
 
       - name: Android lint
-        run: ./gradlew --stacktrace :app:lintDebug
+        run: ./gradlew :app:lintDebug
 
       - name: Build APKs
         env:
@@ -102,7 +102,7 @@ jobs:
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         # The run number only ever grows, so every build installs over the previous one.
         run: >
-          ./gradlew --stacktrace :app:assembleDebug :app:assembleRelease
+          ./gradlew :app:assembleDebug :app:assembleRelease
           -PappVersion="$VERSION" -PappVersionCode="$GITHUB_RUN_NUMBER"
 
       - name: Collect APK
