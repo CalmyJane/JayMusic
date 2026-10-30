@@ -235,6 +235,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setStorageLimitMb(value: Long) = viewModelScope.launch { container.settings.setStorageLimitMb(value) }
     fun setPrefetchCount(value: Int) = viewModelScope.launch { container.settings.setPrefetchCount(value) }
+    fun setLockScreenPlayer(value: Boolean) = viewModelScope.launch { container.settings.setLockScreenPlayer(value) }
     fun setTheme(value: ThemeMode) = viewModelScope.launch { container.settings.setTheme(value) }
 
     fun setSyncOnWifiOnly(value: Boolean) = viewModelScope.launch {

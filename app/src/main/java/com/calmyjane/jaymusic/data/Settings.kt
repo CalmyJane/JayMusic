@@ -32,6 +32,8 @@ data class AppSettings(
     /** Number of upcoming songs downloaded ahead of time. */
     val prefetchCount: Int = 3,
     val theme: ThemeMode = ThemeMode.DARK,
+    /** Show JayMusic's own full screen player with big buttons when the phone is locked. */
+    val lockScreenPlayer: Boolean = true,
     /** Device token from a 2-factor login so later logins need no code. */
     val deviceId: String? = null,
     val lastScanAt: Long = 0,
@@ -56,6 +58,7 @@ class SettingsRepository(context: Context, scope: CoroutineScope) {
         val syncOnWifiOnly = booleanPreferencesKey("sync_wifi_only")
         val prefetchCount = intPreferencesKey("prefetch_count")
         val theme = stringPreferencesKey("theme")
+        val lockScreenPlayer = booleanPreferencesKey("lock_screen_player")
         val deviceId = stringPreferencesKey("device_id")
         val lastScanAt = longPreferencesKey("last_scan_at")
     }
@@ -71,6 +74,7 @@ class SettingsRepository(context: Context, scope: CoroutineScope) {
             syncOnWifiOnly = p[Keys.syncOnWifiOnly] ?: defaults.syncOnWifiOnly,
             prefetchCount = p[Keys.prefetchCount] ?: defaults.prefetchCount,
             theme = p[Keys.theme]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: defaults.theme,
+            lockScreenPlayer = p[Keys.lockScreenPlayer] ?: defaults.lockScreenPlayer,
             deviceId = p[Keys.deviceId],
             lastScanAt = p[Keys.lastScanAt] ?: 0,
         )
@@ -93,6 +97,7 @@ class SettingsRepository(context: Context, scope: CoroutineScope) {
     suspend fun setSyncOnWifiOnly(value: Boolean) = store.edit { it[Keys.syncOnWifiOnly] = value }
     suspend fun setPrefetchCount(value: Int) = store.edit { it[Keys.prefetchCount] = value }
     suspend fun setTheme(value: ThemeMode) = store.edit { it[Keys.theme] = value.name }
+    suspend fun setLockScreenPlayer(value: Boolean) = store.edit { it[Keys.lockScreenPlayer] = value }
     suspend fun setLastScanAt(value: Long) = store.edit { it[Keys.lastScanAt] = value }
 
     suspend fun setDeviceId(value: String?) = store.edit {

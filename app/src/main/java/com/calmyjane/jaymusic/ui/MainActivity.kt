@@ -41,6 +41,7 @@ import com.calmyjane.jaymusic.ui.screens.MiniPlayer
 import com.calmyjane.jaymusic.ui.screens.PlayerScreen
 import com.calmyjane.jaymusic.ui.screens.PlaylistDetailScreen
 import com.calmyjane.jaymusic.ui.screens.PlaylistsScreen
+import com.calmyjane.jaymusic.ui.screens.ServerScreen
 import com.calmyjane.jaymusic.ui.screens.SettingsScreen
 import com.calmyjane.jaymusic.ui.theme.JayMusicTheme
 import com.calmyjane.jaymusic.ui.theme.isDarkTheme
@@ -75,6 +76,7 @@ private enum class Tab(val label: String) { LIBRARY("Library"), PLAYLISTS("Playl
 private sealed interface Page {
     data class Playlist(val id: Long) : Page
     data object Exclusions : Page
+    data object Server : Page
 }
 
 @Composable
@@ -126,10 +128,16 @@ private fun AppRoot(vm: MainViewModel) {
             when (val p = page) {
                 is Page.Playlist -> PlaylistDetailScreen(vm, p.id, padding, onBack = { page = null })
                 Page.Exclusions -> ExclusionsScreen(vm, padding, onBack = { page = null })
+                Page.Server -> ServerScreen(vm, padding, onBack = { page = null })
                 null -> when (tab) {
                     Tab.LIBRARY -> LibraryScreen(vm, padding)
                     Tab.PLAYLISTS -> PlaylistsScreen(vm, padding, onOpen = { page = Page.Playlist(it) })
-                    Tab.SETTINGS -> SettingsScreen(vm, padding, onOpenExclusions = { page = Page.Exclusions })
+                    Tab.SETTINGS -> SettingsScreen(
+                        vm,
+                        padding,
+                        onOpenServer = { page = Page.Server },
+                        onOpenExclusions = { page = Page.Exclusions },
+                    )
                 }
             }
         }

@@ -7,8 +7,13 @@ All notable changes are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Big full screen lock screen player (huge buttons, shuffle, rating), shown when the screen turns
+  off during playback. Android's own lock screen controls cannot be enlarged by apps.
 - QuickConnect IDs can be entered as internet address.
 - Tapping the connection card shows the error for every address tried.
+
+### Changed
+- Settings redesigned as a clean list of equally sized rows; server account on its own page.
 
 ### Fixed
 - Layout no longer jumps: the mini player, the connection card, the sync status and the rating

@@ -4,8 +4,9 @@ A fast, offline-first music player for Android that plays your music from a **Sy
 
 - **Always plays immediately.** No “connecting…” screen. Downloaded songs play even with no
   network; when the NAS is reachable, every song on it can be streamed too.
-- **Big lock screen player** with previous / play-pause / next plus **shuffle** and **repeat**
-  buttons (Android's media controls on the lock screen and in the notification shade).
+- **Big lock screen player:** a full screen player with huge previous / next / play-pause and
+  **shuffle** buttons appears on the lock screen during playback. Android's regular media controls
+  (with shuffle and repeat) are available as well.
 - **Ratings** (1–5 stars) and **playlists**.
 - **Smart storage:** songs you play and the best rated songs of your library are kept on the phone
   up to a limit you choose. When the limit is reached, the **worst rated songs are deleted first**.
