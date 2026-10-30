@@ -36,9 +36,35 @@ object LockScreenLauncher {
     private const val NOTIFICATION_ID = 4711
 
     /** What the lock screen player needs and what is missing; shown in Settings. */
-    data class Requirements(val notifications: Boolean, val fullScreen: Boolean, val overlay: Boolean) {
-        /** The full-screen notification path works. */
-        val ready: Boolean get() = notifications && fullScreen
+    data class Requirements(
+        val notifications: Boolean,
+        val fullScreen: Boolean,
+        val overlay: Boolean,
+        val battery: Boolean,
+    ) {
+        val ready: Boolean get() = notifications && fullScreen && overlay && battery
+    }
+
+    private val _events = kotlinx.coroutines.flow.MutableStateFlow<List<String>>(emptyList())
+
+    /** The last attempts to show the player, newest first; shown on the setup page. */
+    val events: kotlinx.coroutines.flow.StateFlow<List<String>> = _events
+
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+
+    private fun log(message: String) {
+        Log.i(TAG, message)
+        val time = java.text.DateFormat.getTimeInstance(java.text.DateFormat.MEDIUM).format(java.util.Date())
+        _events.value = (listOf("$time  $message") + _events.value).take(12)
+    }
+
+    /** Checks a moment later whether the player actually appeared. */
+    private fun verifyShown(what: String) {
+        val requestedAt = android.os.SystemClock.elapsedRealtime()
+        handler.postDelayed({
+            val started = LockScreenActivity.isShowing || LockScreenActivity.lastCreatedAt >= requestedAt
+            log(if (started) "$what: opened" else "$what: not opened (blocked by Android)")
+        }, 2_500)
     }
 
     fun requirements(context: Context): Requirements {
@@ -46,7 +72,9 @@ object LockScreenLauncher {
         val notifications = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
         val fullScreen = Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE || nm.canUseFullScreenIntent()
-        return Requirements(notifications && nm.areNotificationsEnabled(), fullScreen, Settings.canDrawOverlays(context))
+        val battery = context.getSystemService(android.os.PowerManager::class.java)
+            .isIgnoringBatteryOptimizations(context.packageName)
+        return Requirements(notifications && nm.areNotificationsEnabled(), fullScreen, Settings.canDrawOverlays(context), battery)
     }
 
     private fun isLocked(context: Context): Boolean =
@@ -54,21 +82,29 @@ object LockScreenLauncher {
 
     /** Screen turned off during playback: try to have the player ready when it turns on again. */
     fun onScreenOff(context: Context) {
-        if (!Settings.canDrawOverlays(context)) return
+        if (!Settings.canDrawOverlays(context)) {
+            log("Screen off: no permission to display over other apps")
+            return
+        }
         try {
             context.startActivity(LockScreenActivity.intent(context))
+            verifyShown("Screen off")
         } catch (e: Exception) {
-            Log.i(TAG, "Direct start blocked: $e")
+            log("Screen off: start failed (${e.javaClass.simpleName})")
         }
     }
 
     /** Screen turned on during playback while locked: show the player via full-screen intent. */
     @SuppressLint("MissingPermission") // Checked in requirements().
     fun onScreenOn(context: Context) {
-        if (!isLocked(context) || LockScreenActivity.isShowing) return
+        if (LockScreenActivity.isShowing) return
+        if (!isLocked(context)) {
+            log("Screen on: phone not locked")
+            return
+        }
         val req = requirements(context)
-        if (!req.ready) {
-            Log.i(TAG, "Full-screen notification not possible: $req")
+        if (!req.notifications || !req.fullScreen) {
+            log("Screen on: notification permissions missing")
             return
         }
         val nm = context.getSystemService(NotificationManager::class.java)
@@ -101,8 +137,9 @@ object LockScreenLauncher {
             .build()
         try {
             nm.notify(NOTIFICATION_ID, notification)
+            verifyShown("Screen on")
         } catch (e: SecurityException) {
-            Log.i(TAG, "Notification not allowed: $e")
+            log("Screen on: notification not allowed")
         }
     }
 

@@ -145,12 +145,37 @@ class PlayerConnection(
         return if (skipped > 0) PlayResult.StartedOffline(skipped) else PlayResult.Started
     }
 
+    /** Plays [track] after the current song, also when shuffle is on. */
     fun playNext(track: TrackEntity) = withController { c ->
         if (c.mediaItemCount == 0) {
             play(listOf(track))
         } else {
-            c.addMediaItem(c.currentMediaItemIndex + 1, MediaItems.from(track))
+            insertAfterCurrent(c, track)
         }
+    }
+
+    /** Plays [track] now: jumps to it if it is in the queue, otherwise inserts it and jumps. */
+    fun playNow(track: TrackEntity) = withController { c ->
+        if (c.mediaItemCount == 0) {
+            play(listOf(track))
+            return@withController
+        }
+        val existing = (0 until c.mediaItemCount).firstOrNull { c.getMediaItemAt(it).mediaId == track.path }
+        val index = existing ?: insertAfterCurrent(c, track)
+        c.seekTo(index, 0)
+        if (c.playbackState == Player.STATE_IDLE) c.prepare()
+        c.play()
+    }
+
+    private fun insertAfterCurrent(c: MediaController, track: TrackEntity): Int {
+        val index = c.currentMediaItemIndex + 1
+        c.addMediaItem(index, MediaItems.from(track))
+        // With shuffle on, the service moves the new item right behind the current one.
+        c.sendCustomCommand(
+            SessionCommand(PlaybackService.CMD_MAKE_NEXT, Bundle.EMPTY),
+            Bundle().apply { putInt(PlaybackService.EXTRA_INDEX, index) },
+        )
+        return index
     }
 
     fun addToQueue(track: TrackEntity) = withController { c ->
@@ -185,10 +210,33 @@ class PlayerConnection(
         it.sendCustomCommand(SessionCommand(PlaybackService.CMD_CYCLE_REPEAT, Bundle.EMPTY), Bundle.EMPTY)
     }
 
-    /** The current queue in play order, for the queue view. */
-    fun queue(): List<MediaItem> {
+    /** One song of the queue as shown in the queue view. */
+    data class QueueEntry(val index: Int, val mediaId: String, val title: String, val artist: String, val isCurrent: Boolean)
+
+    /**
+     * The current song and the next [count] songs in play order (respecting shuffle), so the
+     * queue view shows what will really play next.
+     */
+    fun upcoming(count: Int): List<QueueEntry> {
         val c = controller ?: return emptyList()
-        return List(c.mediaItemCount) { c.getMediaItemAt(it) }
+        val timeline = c.currentTimeline
+        if (timeline.isEmpty) return emptyList()
+        val repeat = if (c.repeatMode == Player.REPEAT_MODE_ALL) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
+        val result = mutableListOf<QueueEntry>()
+        var index = c.currentMediaItemIndex
+        while (index != androidx.media3.common.C.INDEX_UNSET && result.size <= count) {
+            val item = c.getMediaItemAt(index)
+            result += QueueEntry(
+                index = index,
+                mediaId = item.mediaId,
+                title = item.mediaMetadata.title?.toString().orEmpty(),
+                artist = item.mediaMetadata.artist?.toString().orEmpty(),
+                isCurrent = index == c.currentMediaItemIndex,
+            )
+            index = timeline.getNextWindowIndex(index, repeat, c.shuffleModeEnabled)
+            if (index == c.currentMediaItemIndex) break
+        }
+        return result
     }
 
     fun skipToQueueIndex(index: Int) = withController { it.seekTo(index, 0) }

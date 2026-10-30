@@ -7,13 +7,18 @@ All notable changes are documented here. The format follows
 ## [Unreleased]
 
 ### Added
-- Big full screen lock screen player (huge buttons, shuffle, rating), opened via a full screen
-  notification when the screen is turned on during playback; setup page with permission
-  checklist and preview. Android's own lock screen controls cannot be enlarged by apps.
+- Big full screen lock screen player, opened via a full screen notification when the screen is
+  turned on during playback; setup page with permission checklist, preview and a log of recent
+  attempts. Android's own lock screen controls cannot be enlarged by apps.
 - QuickConnect IDs can be entered as internet address.
 - Tapping the connection card shows the error for every address tried.
 
 ### Changed
+- Lock screen player redesigned after car-mode players: huge previous/next at the top, queue
+  ("up next") in the middle, a wide play/pause bar with small shuffle/repeat toggles, quick
+  search (play now, play next, add to playlist), add current song to playlist and rating.
+  Swipe up to unlock, tap an empty area to close.
+- "Play next" now really plays next when shuffle is on.
 - Shuffle is a pure on/off switch: it no longer starts a new song, and tapping a song no longer
   turns it off. With shuffle on, *previous* returns to the songs actually played before.
 - Previous/next are pinned to their places in the system media controls.

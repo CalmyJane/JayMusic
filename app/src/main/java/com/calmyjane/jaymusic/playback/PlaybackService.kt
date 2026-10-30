@@ -222,6 +222,23 @@ class PlaybackService : MediaSessionService() {
         return false
     }
 
+    /** In shuffle mode, moves the item at [index] directly behind the current song in play order. */
+    private fun makeNextInShuffle(index: Int) {
+        if (!player.shuffleModeEnabled || index !in 0 until player.mediaItemCount) return
+        val timeline = player.currentTimeline
+        val current = player.currentMediaItemIndex
+        val order = ArrayList<Int>(player.mediaItemCount)
+        var i = timeline.getFirstWindowIndex(true)
+        while (i != C.INDEX_UNSET && order.size < player.mediaItemCount) {
+            if (i != index) order += i
+            if (i == current) order += index
+            i = timeline.getNextWindowIndex(i, Player.REPEAT_MODE_OFF, true)
+        }
+        if (order.size != player.mediaItemCount) return
+        player.setShuffleOrder(DefaultShuffleOrder(order.toIntArray(), System.nanoTime()))
+        schedulePrefetch()
+    }
+
     /**
      * Builds a new random order that starts with the current song, so "next" is random among all
      * other songs. Called when shuffle is switched on or a new list is started.
@@ -253,6 +270,7 @@ class PlaybackService : MediaSessionService() {
                 .add(SessionCommand(CMD_SHUFFLE_ON, Bundle.EMPTY))
                 .add(SessionCommand(CMD_SHUFFLE_OFF, Bundle.EMPTY))
                 .add(SessionCommand(CMD_CYCLE_REPEAT, Bundle.EMPTY))
+                .add(SessionCommand(CMD_MAKE_NEXT, Bundle.EMPTY))
                 .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(commands)
@@ -266,6 +284,7 @@ class PlaybackService : MediaSessionService() {
             args: Bundle,
         ): ListenableFuture<SessionResult> {
             when (customCommand.customAction) {
+                CMD_MAKE_NEXT -> makeNextInShuffle(args.getInt(EXTRA_INDEX, -1))
                 CMD_SHUFFLE_ON -> player.shuffleModeEnabled = true
                 CMD_SHUFFLE_OFF -> player.shuffleModeEnabled = false
                 CMD_CYCLE_REPEAT -> player.repeatMode = when (player.repeatMode) {
@@ -583,6 +602,8 @@ class PlaybackService : MediaSessionService() {
         const val CMD_SHUFFLE_ON = "jaymusic.SHUFFLE_ON"
         const val CMD_SHUFFLE_OFF = "jaymusic.SHUFFLE_OFF"
         const val CMD_CYCLE_REPEAT = "jaymusic.CYCLE_REPEAT"
+        const val CMD_MAKE_NEXT = "jaymusic.MAKE_NEXT"
+        const val EXTRA_INDEX = "index"
 
         private const val STALL_TIMEOUT_MS = 8_000L
         private const val PREFETCH_DEBOUNCE_MS = 700L

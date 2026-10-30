@@ -1,6 +1,7 @@
 package com.calmyjane.jaymusic.ui.screens
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Build
 import android.net.Uri
@@ -325,11 +326,25 @@ fun LockScreenSettingsScreen(vm: MainViewModel, contentPadding: PaddingValues, o
         PermissionRow("Display over other apps", req.overlay) {
             context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}")))
         }
+        PermissionRow("Unrestricted battery use", req.battery) {
+            @SuppressLint("BatteryLife")
+            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}"))
+            context.startActivity(intent)
+        }
 
         Button(
             onClick = { context.startActivity(LockScreenActivity.intent(context)) },
             modifier = Modifier.fillMaxWidth().padding(16.dp).height(56.dp),
         ) { Text("Preview") }
+
+        SectionHeader("Recent attempts")
+        val events by LockScreenLauncher.events.collectAsStateWithLifecycle()
+        Text(
+            events.joinToString("\n").ifEmpty { "None yet. Lock the phone while music plays." },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
     }
 }
 
