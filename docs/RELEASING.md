@@ -1,24 +1,38 @@
 # Releasing
 
-Releases are built by `.github/workflows/release.yml` and published on the GitHub
-**Releases** page with the APK and its SHA-256 checksum.
+Everything is done by the single pipeline `.github/workflows/ci.yml`. Every build runs the unit
+tests and Android lint and builds a signed, minified APK before anything is published.
 
-## Publish a release
+| Trigger | Result on the Releases page |
+| --- | --- |
+| Push to any branch | **Test build** `v0.1.0-test.<run>` (marked *Pre-release*). |
+| Push a tag `v1.2.3` | **Final release** “JayMusic 1.2.3”, marked *Latest*, with generated release notes. |
+| Push a tag `v1.2.3-beta.1` | Pre-release “Test build 1.2.3-beta.1”. |
+| Actions › CI › *Run workflow* with a version | Final release of that version from the chosen branch. |
+| Pull request | Checks only, nothing is published. |
 
-1. Update `CHANGELOG.md` (move *Unreleased* entries under the new version) and merge to the main
-   branch.
-2. Either push a tag:
-   ```bash
-   git tag v1.2.0
-   git push origin v1.2.0
-   ```
-   or run **Actions › Release › Run workflow** and enter `1.2.0`.
-3. The workflow runs the tests, builds a minified release APK, signs it and creates the release
-   `v1.2.0` with `JayMusic-1.2.0.apk`.
+## Test builds
 
-The version name is taken from the tag; the version code is derived from it
-(`major * 10000 + minor * 100 + patch`), so newer versions always install over older ones.
-Versions with a suffix (`1.2.0-beta.1`) are published as pre-releases.
+- Name: `<appVersion>-test.<run number>`; `appVersion` is the base version in `gradle.properties`.
+- Only the newest 5 test builds are kept (`KEEP_TEST_RELEASES` in the workflow); older ones and
+  their tags are deleted automatically.
+- Publishing a final release deletes **all** test builds.
+
+## Final release
+
+1. Update `CHANGELOG.md` (move *Unreleased* entries under the new version).
+2. Publish, either:
+   - push a tag: `git tag v1.2.0 && git push origin v1.2.0`, or
+   - GitHub › Actions › **CI** › *Run workflow*, enter `1.2.0`, or
+   - GitHub › Releases › *Draft a new release*, create tag `v1.2.0` on publish (the workflow
+     then attaches the APK to that release).
+3. Bump `appVersion` in `gradle.properties` to the next version (e.g. `1.2.1`) so further test
+   builds are named after it.
+
+## Version codes
+
+The version code is the workflow run number, which only ever increases. Therefore every build,
+test or final, installs over the previously installed one.
 
 ## Signing
 

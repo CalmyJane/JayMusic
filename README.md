@@ -21,6 +21,10 @@ A fast, offline-first music player for Android that plays your music from a **Sy
    browser once.
 3. Updates: install the newer APK the same way; your library, ratings and downloads are kept.
 
+Every push also publishes a **test build** (pre-release `x.y.z-test.N`) on the
+[Releases page](../../releases); only the newest few are kept. See
+[docs/RELEASING.md](docs/RELEASING.md).
+
 Requires Android 8.0 or newer.
 
 ## Set up your Synology

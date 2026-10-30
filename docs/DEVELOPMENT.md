@@ -47,11 +47,12 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces work together.
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on every push and pull request:
+`.github/workflows/ci.yml` runs on every push, tag and pull request:
 
 1. unit tests (`core` and `app`),
 2. Android lint,
-3. debug APK build, uploaded as a workflow artifact (download it from the run's summary page to
-   test a branch on the phone).
+3. debug and minified release APK builds,
+4. publishing: a test pre-release for branch pushes, a final release for `v1.2.3` tags
+   (see [RELEASING.md](RELEASING.md)).
 
-Test and lint reports are uploaded as artifacts as well.
+Test and lint reports and the debug APK are uploaded as workflow artifacts.

@@ -17,4 +17,5 @@ All notable changes are documented here. The format follows
 - Ratings, playlists, search, sorting and folder browsing.
 - Background sync via WorkManager.
 - Black and white high contrast theme (dark default, light, system).
-- CI (unit tests, lint, debug APK) and release workflow publishing signed APKs.
+- CI pipeline: unit tests, lint, APK builds; test pre-release for every push (old ones pruned),
+  final release for `v*` tags.

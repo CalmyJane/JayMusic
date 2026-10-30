@@ -7,17 +7,11 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-// Release builds get their version from the git tag (see .github/workflows/release.yml):
-//   ./gradlew assembleRelease -PappVersion=1.2.3
-val appVersion = (findProperty("appVersion") as String?)?.removePrefix("v") ?: "0.0.0-dev"
-
-/** 1.2.3 -> 10203. Pre-release suffixes are ignored; a dev build is 1. */
-fun versionCodeOf(version: String): Int {
-    val parts = version.substringBefore('-').split('.').mapNotNull { it.toIntOrNull() }
-    if (parts.isEmpty() || parts.all { it == 0 }) return 1
-    val (major, minor, patch) = (parts + listOf(0, 0, 0)).take(3)
-    return major * 10_000 + minor * 100 + patch
-}
+// The version name defaults to appVersion in gradle.properties. CI passes the exact version and
+// its (always increasing) run number as version code, see .github/workflows/ci.yml:
+//   ./gradlew assembleRelease -PappVersion=1.2.3 -PappVersionCode=42
+val appVersion = (findProperty("appVersion") as String).removePrefix("v")
+val appVersionCode = (findProperty("appVersionCode") as String?)?.toInt() ?: 1
 
 android {
     namespace = "com.calmyjane.jaymusic"
@@ -27,7 +21,7 @@ android {
         applicationId = "com.calmyjane.jaymusic"
         minSdk = 26
         targetSdk = 35
-        versionCode = versionCodeOf(appVersion)
+        versionCode = appVersionCode
         versionName = appVersion
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
