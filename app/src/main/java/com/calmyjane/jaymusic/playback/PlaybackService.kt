@@ -20,7 +20,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
+import androidx.media3.exoplayer.source.ShuffleOrder
 import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -193,8 +193,15 @@ class PlaybackService : MediaSessionService() {
     /** Song we are going back to; its transition must not be added to the history. */
     private var backTarget: String? = null
 
-    /** Queue size and song the shuffle order was last built for. */
-    private var shuffledFor: Pair<Int, String?>? = null
+    /**
+     * The queue in the order the list was started with (e.g. sorted by title). Shuffle physically
+     * reorders the queue, so the upcoming songs shown are exactly what plays next and stay put
+     * while skipping; turning shuffle off restores this order.
+     */
+    private var linearOrder: List<String> = emptyList()
+
+    /** True while restoring the saved queue; its order must not be changed. */
+    private var restoring = false
 
     /**
      * Wraps the player for the media session (app, notification, lock screen, headset):
@@ -222,73 +229,82 @@ class PlaybackService : MediaSessionService() {
         return false
     }
 
-    /** The queue indices in the order they will be played (shuffle order if shuffle is on). */
-    private fun playOrder(): MutableList<Int> {
-        val timeline = player.currentTimeline
-        val order = ArrayList<Int>(player.mediaItemCount)
-        var i = timeline.getFirstWindowIndex(player.shuffleModeEnabled)
-        while (i != C.INDEX_UNSET && order.size < player.mediaItemCount) {
-            order += i
-            i = timeline.getNextWindowIndex(i, Player.REPEAT_MODE_OFF, player.shuffleModeEnabled)
-        }
-        return order
-    }
-
-    /** Drag and drop in the queue view: puts [from] before or after [to] in play order. */
+    /** Drag and drop in the queue view: puts [from] before or after [to]. */
     private fun moveInPlayOrder(from: Int, to: Int, after: Boolean) {
         val count = player.mediaItemCount
         if (from !in 0 until count || to !in 0 until count || from == to) return
-        if (player.shuffleModeEnabled) {
-            val order = playOrder()
-            if (order.size != count) return
-            order.remove(from)
-            order.add(order.indexOf(to) + if (after) 1 else 0, from)
-            player.setShuffleOrder(DefaultShuffleOrder(order.toIntArray(), System.nanoTime()))
-        } else {
-            // moveMediaItem inserts at the index in the list without the moved item, which is
-            // exactly "after to" when moving down and "before to" when moving up.
-            val target = when {
-                after && from > to -> to + 1
-                !after && from < to -> to - 1
-                else -> to
-            }
-            player.moveMediaItem(from, target)
+        // The queue order is the play order (see linearOrder), so a plain move does it.
+        // moveMediaItem inserts at the index in the list without the moved item.
+        val target = when {
+            after && from > to -> to + 1
+            !after && from < to -> to - 1
+            else -> to
         }
-        schedulePrefetch()
-    }
-
-    /** In shuffle mode, moves the item at [index] directly behind the current song in play order. */
-    private fun makeNextInShuffle(index: Int) {
-        if (!player.shuffleModeEnabled || index !in 0 until player.mediaItemCount) return
-        val timeline = player.currentTimeline
-        val current = player.currentMediaItemIndex
-        val order = ArrayList<Int>(player.mediaItemCount)
-        var i = timeline.getFirstWindowIndex(true)
-        while (i != C.INDEX_UNSET && order.size < player.mediaItemCount) {
-            if (i != index) order += i
-            if (i == current) order += index
-            i = timeline.getNextWindowIndex(i, Player.REPEAT_MODE_OFF, true)
-        }
-        if (order.size != player.mediaItemCount) return
-        player.setShuffleOrder(DefaultShuffleOrder(order.toIntArray(), System.nanoTime()))
+        player.moveMediaItem(from, target)
         schedulePrefetch()
     }
 
     /**
-     * Builds a new random order that starts with the current song, so "next" is random among all
-     * other songs. Called when shuffle is switched on or a new list is started.
+     * Keeps ExoPlayer's own shuffle order equal to the queue order. Shuffling is done by
+     * reordering the queue itself, so the shown "up next" list never changes on its own.
      */
-    private fun reshuffleFromCurrent() {
+    private fun ensureQueueOrderIsPlayOrder() {
+        val count = player.mediaItemCount
+        if (count == 0) return
+        val timeline = player.currentTimeline
+        var identity = timeline.getFirstWindowIndex(true) == 0
+        var i = 0
+        while (identity && i < count - 1) {
+            identity = timeline.getNextWindowIndex(i, Player.REPEAT_MODE_OFF, true) == i + 1
+            i++
+        }
+        if (!identity) player.setShuffleOrder(ShuffleOrder.UnshuffledShuffleOrder(count))
+    }
+
+    /** A new list was started (from the app): remember its order and shuffle it if needed. */
+    private fun onNewList() {
+        linearOrder = List(player.mediaItemCount) { player.getMediaItemAt(it).mediaId }
+        if (player.shuffleModeEnabled) shuffleUpcoming() else ensureQueueOrderIsPlayOrder()
+    }
+
+    /**
+     * Shuffle on: the current song moves to the top and all other songs follow in a new random
+     * order. Playback is not interrupted.
+     */
+    private fun shuffleUpcoming() {
+        val count = player.mediaItemCount
+        if (count >= 2) {
+            val current = player.currentMediaItemIndex
+            if (current != 0) player.moveMediaItem(current, 0)
+            val others = (1 until count).map { player.getMediaItemAt(it) }.shuffled()
+            player.replaceMediaItems(1, count, others)
+        }
+        ensureQueueOrderIsPlayOrder()
+        schedulePrefetch()
+    }
+
+    /** Shuffle off: back to the list's original order; the current song keeps playing. */
+    private fun restoreLinearOrder() {
         val count = player.mediaItemCount
         if (count < 2) return
-        val current = player.currentMediaItemIndex
-        val rest = (0 until count).filter { it != current }.shuffled()
-        val order = IntArray(count).also { array ->
-            array[0] = current
-            rest.forEachIndexed { i, index -> array[i + 1] = index }
+        val remaining = LinkedHashMap<String, ArrayDeque<MediaItem>>()
+        for (i in 0 until count) {
+            val item = player.getMediaItemAt(i)
+            remaining.getOrPut(item.mediaId) { ArrayDeque() }.addLast(item)
         }
-        player.setShuffleOrder(DefaultShuffleOrder(order, System.nanoTime()))
-        shuffledFor = count to player.currentMediaItem?.mediaId
+        val target = ArrayList<MediaItem>(count)
+        for (id in linearOrder) remaining[id]?.removeFirstOrNull()?.let(target::add)
+        // Songs added later (play next, add to queue) go to the end.
+        remaining.values.forEach { target.addAll(it) }
+        val currentId = player.currentMediaItem?.mediaId ?: return
+        val position = target.indexOfFirst { it.mediaId == currentId }
+        if (position < 0 || target.size != count) return
+        val current = player.currentMediaItemIndex
+        // Replace around the current song so it keeps playing.
+        player.replaceMediaItems(current + 1, count, target.subList(position + 1, target.size))
+        player.replaceMediaItems(0, current, target.subList(0, position))
+        ensureQueueOrderIsPlayOrder()
+        schedulePrefetch()
     }
 
     private fun updateMediaButtons() {
@@ -307,6 +323,7 @@ class PlaybackService : MediaSessionService() {
                 .add(SessionCommand(CMD_CYCLE_REPEAT, Bundle.EMPTY))
                 .add(SessionCommand(CMD_MAKE_NEXT, Bundle.EMPTY))
                 .add(SessionCommand(CMD_MOVE, Bundle.EMPTY))
+                .add(SessionCommand(CMD_NEW_LIST, Bundle.EMPTY))
                 .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(commands)
@@ -320,7 +337,8 @@ class PlaybackService : MediaSessionService() {
             args: Bundle,
         ): ListenableFuture<SessionResult> {
             when (customCommand.customAction) {
-                CMD_MAKE_NEXT -> makeNextInShuffle(args.getInt(EXTRA_INDEX, -1))
+                CMD_MAKE_NEXT -> ensureQueueOrderIsPlayOrder()
+                CMD_NEW_LIST -> onNewList()
                 CMD_MOVE -> moveInPlayOrder(args.getInt(EXTRA_FROM, -1), args.getInt(EXTRA_INDEX, -1), args.getBoolean(EXTRA_AFTER))
                 CMD_SHUFFLE_ON -> player.shuffleModeEnabled = true
                 CMD_SHUFFLE_OFF -> player.shuffleModeEnabled = false
@@ -365,12 +383,6 @@ class PlaybackService : MediaSessionService() {
                     if (history.size > MAX_HISTORY) history.removeFirst()
                 }
             }
-            // A new list was started: shuffle it from the chosen song.
-            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED && player.shuffleModeEnabled &&
-                shuffledFor != (player.mediaItemCount to path) && path != previous
-            ) {
-                reshuffleFromCurrent()
-            }
             if (path != previous || reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT) {
                 countedPath = null
             }
@@ -389,14 +401,17 @@ class PlaybackService : MediaSessionService() {
 
         override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
             if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) {
+                if (player.shuffleModeEnabled) ensureQueueOrderIsPlayOrder()
                 schedulePrefetch()
                 saveQueueSoon()
             }
         }
 
         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
-            // Switching shuffle on never changes the current song; only what comes next.
-            if (shuffleModeEnabled) reshuffleFromCurrent()
+            // Never changes the current song; only what comes next.
+            if (!restoring) {
+                if (shuffleModeEnabled) shuffleUpcoming() else restoreLinearOrder()
+            }
             updateMediaButtons()
             schedulePrefetch()
             saveQueueSoon()
@@ -590,6 +605,7 @@ class PlaybackService : MediaSessionService() {
             positionMs = player.currentPosition,
             shuffle = player.shuffleModeEnabled,
             repeatMode = player.repeatMode,
+            linear = linearOrder,
         )
     }
 
@@ -628,9 +644,16 @@ class PlaybackService : MediaSessionService() {
         scope.launch {
             val restored = loadSavedQueue() ?: return@launch
             if (player.mediaItemCount > 0) return@launch // The user already started something.
-            player.shuffleModeEnabled = restored.saved.shuffle
             player.repeatMode = restored.saved.repeatMode
             player.setMediaItems(restored.items, restored.index, restored.positionMs)
+            linearOrder = restored.saved.linear.ifEmpty { restored.items.map { it.mediaId } }
+            // Set after the items so the saved (already shuffled) order is kept as it is.
+            if (player.shuffleModeEnabled != restored.saved.shuffle) {
+                restoring = true
+                player.shuffleModeEnabled = restored.saved.shuffle
+                restoring = false
+            }
+            ensureQueueOrderIsPlayOrder()
         }
     }
 
@@ -641,6 +664,7 @@ class PlaybackService : MediaSessionService() {
         const val CMD_CYCLE_REPEAT = "jaymusic.CYCLE_REPEAT"
         const val CMD_MAKE_NEXT = "jaymusic.MAKE_NEXT"
         const val CMD_MOVE = "jaymusic.MOVE"
+        const val CMD_NEW_LIST = "jaymusic.NEW_LIST"
         const val EXTRA_INDEX = "index"
         const val EXTRA_FROM = "from"
         const val EXTRA_AFTER = "after"

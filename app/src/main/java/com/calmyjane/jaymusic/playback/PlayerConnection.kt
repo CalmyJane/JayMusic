@@ -147,6 +147,8 @@ class PlayerConnection(
         val items = playable.map(MediaItems::from)
         withController { c ->
             c.setMediaItems(items, index, 0)
+            // Lets the service remember the list order and shuffle it if shuffle is on.
+            c.sendCustomCommand(SessionCommand(PlaybackService.CMD_NEW_LIST, Bundle.EMPTY), Bundle.EMPTY)
             c.prepare()
             c.play()
         }

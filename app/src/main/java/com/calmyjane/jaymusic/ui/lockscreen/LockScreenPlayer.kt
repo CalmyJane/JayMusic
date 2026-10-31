@@ -10,6 +10,9 @@ import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.RemoveCircleOutline
 import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.zIndex
@@ -405,44 +408,80 @@ private fun QueueList(
         ) {
             items(display, key = { keyOf(it) }) { entry ->
                 val dragging = keyOf(entry) == draggingKey
-                Row(
-                    Modifier
-                        .zIndex(if (dragging) 1f else 0f)
-                        .graphicsLayer { translationY = if (dragging) dragOffset else 0f }
-                        .fillMaxWidth()
-                        .height(52.dp)
-                        .background(if (dragging) Color(0xFF262626) else Color.Black)
-                        .clickable { player.skipToQueueIndex(entry.index) }
-                        .padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (entry.isCurrent) {
-                        Icon(Icons.Filled.Equalizer, contentDescription = "Playing", tint = Color.White, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(10.dp))
-                    }
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            entry.title,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = if (entry.isCurrent) FontWeight.Black else FontWeight.Medium,
-                            color = Color.White,
-                            maxLines = 1,
-                            // Long names scroll by instead of being cut off.
-                            modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE),
-                        )
-                        Text(
-                            entry.artist,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Gray,
-                            maxLines = 1,
-                            modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE),
-                        )
-                    }
-                    if (!entry.isCurrent) {
-                        Icon(Icons.Filled.DragHandle, contentDescription = null, tint = DimGray, modifier = Modifier.size(20.dp))
+                val rowModifier = Modifier
+                    .zIndex(if (dragging) 1f else 0f)
+                    .graphicsLayer { translationY = if (dragging) dragOffset else 0f }
+                if (entry.isCurrent) {
+                    QueueRow(entry, dragging, rowModifier) { player.skipToQueueIndex(entry.index) }
+                } else {
+                    // Swipe left to remove the song from the queue.
+                    val dismissState = rememberSwipeToDismissBoxState(
+                        confirmValueChange = { value ->
+                            if (value == SwipeToDismissBoxValue.EndToStart) {
+                                player.removeFromQueue(entry.index)
+                                true
+                            } else {
+                                false
+                            }
+                        },
+                    )
+                    SwipeToDismissBox(
+                        state = dismissState,
+                        enableDismissFromStartToEnd = false,
+                        modifier = rowModifier,
+                        backgroundContent = {
+                            Box(
+                                Modifier.fillMaxSize().background(Color(0xFF2A2A2A)).padding(horizontal = 16.dp),
+                                contentAlignment = Alignment.CenterEnd,
+                            ) {
+                                Icon(Icons.Filled.RemoveCircleOutline, contentDescription = "Remove", tint = Color.White)
+                            }
+                        },
+                    ) {
+                        QueueRow(entry, dragging, Modifier) { player.skipToQueueIndex(entry.index) }
                     }
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun QueueRow(entry: PlayerConnection.QueueEntry, dragging: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .background(if (dragging) Color(0xFF262626) else Color.Black)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (entry.isCurrent) {
+            Icon(Icons.Filled.Equalizer, contentDescription = "Playing", tint = Color.White, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(10.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(
+                entry.title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = if (entry.isCurrent) FontWeight.Black else FontWeight.Medium,
+                color = Color.White,
+                maxLines = 1,
+                // Long names scroll by instead of being cut off.
+                modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE),
+            )
+            Text(
+                entry.artist,
+                style = MaterialTheme.typography.bodySmall,
+                color = Gray,
+                maxLines = 1,
+                modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE),
+            )
+        }
+        if (!entry.isCurrent) {
+            Icon(Icons.Filled.DragHandle, contentDescription = null, tint = DimGray, modifier = Modifier.size(20.dp))
         }
     }
 }

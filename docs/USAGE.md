@@ -21,10 +21,16 @@
   previous, play/pause, next, shuffle and repeat. Their size is decided by Android and the phone
   manufacturer and cannot be changed by apps — hence the big player above.
 
-**Shuffle** is a switch: it never changes the song that is playing, it only decides whether the
-*next* song is random. With shuffle on, *previous* goes back to the song you actually heard
-before (also several steps back), and *next* continues with random songs. *Play* starts a list
-from the top, or from a random song when shuffle is on.
+**Shuffle** is a switch and never changes the song that is playing:
+
+- *On*: all other songs of the list follow in a new random order, which then stays fixed while
+  you skip, so the "up next" list is exactly what will play.
+- *Off*: the list goes back to its original order (e.g. sorted by title).
+- Don't like what's coming up? Toggle shuffle off and on for a new random order.
+- *Previous* goes back to the song you actually heard before.
+
+In the lock screen player's "up next" list, hold and drag a song to move it, swipe it to the left
+to remove it, or hold it without moving for more options.
 
 Long-press a song (or tap ⋮) for: rate, play next, add to queue, add to playlist.
 
