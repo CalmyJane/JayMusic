@@ -23,6 +23,7 @@ class JayMusicApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        CrashLog.install(this)
         container = AppContainer(this)
         container.connection.start()
         container.sync.schedulePeriodic()

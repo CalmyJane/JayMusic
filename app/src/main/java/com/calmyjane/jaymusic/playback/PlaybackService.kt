@@ -27,6 +27,7 @@ import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import com.calmyjane.jaymusic.AppContainer
+import com.calmyjane.jaymusic.CrashLog
 import com.calmyjane.jaymusic.JayMusicApp
 import com.calmyjane.jaymusic.R
 import com.calmyjane.jaymusic.ui.MainActivity
@@ -338,7 +339,11 @@ class PlaybackService : MediaSessionService() {
         ): ListenableFuture<SessionResult> {
             when (customCommand.customAction) {
                 CMD_MAKE_NEXT -> ensureQueueOrderIsPlayOrder()
-                CMD_NEW_LIST -> onNewList()
+                CMD_NEW_LIST -> try {
+                    onNewList()
+                } catch (e: Exception) {
+                    CrashLog.nonFatal("Preparing new list failed", e)
+                }
                 CMD_MOVE -> moveInPlayOrder(args.getInt(EXTRA_FROM, -1), args.getInt(EXTRA_INDEX, -1), args.getBoolean(EXTRA_AFTER))
                 CMD_SHUFFLE_ON -> player.shuffleModeEnabled = true
                 CMD_SHUFFLE_OFF -> player.shuffleModeEnabled = false
@@ -401,7 +406,9 @@ class PlaybackService : MediaSessionService() {
 
         override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
             if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) {
-                if (player.shuffleModeEnabled) ensureQueueOrderIsPlayOrder()
+                if (player.shuffleModeEnabled) {
+                    runCatching { ensureQueueOrderIsPlayOrder() }.onFailure { CrashLog.nonFatal("Keeping play order failed", it) }
+                }
                 schedulePrefetch()
                 saveQueueSoon()
             }
@@ -410,7 +417,12 @@ class PlaybackService : MediaSessionService() {
         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
             // Never changes the current song; only what comes next.
             if (!restoring) {
-                if (shuffleModeEnabled) shuffleUpcoming() else restoreLinearOrder()
+                // Reordering must never take playback down; worst case the order stays as it is.
+                try {
+                    if (shuffleModeEnabled) shuffleUpcoming() else restoreLinearOrder()
+                } catch (e: Exception) {
+                    CrashLog.nonFatal("Reordering queue for shuffle=$shuffleModeEnabled failed", e)
+                }
             }
             updateMediaButtons()
             schedulePrefetch()

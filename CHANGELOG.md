@@ -7,6 +7,7 @@ All notable changes are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Error report in Settings (last crash or handled error, with copy button) for bug reports.
 - "Never download" per folder (cloud icon in the folder view) and per song (song menu); existing
   copies are deleted, and it can be switched back at any time.
 - "Lock player" button in the bottom navigation opens the lock screen player.
@@ -42,6 +43,9 @@ All notable changes are documented here. The format follows
 - Settings redesigned as a clean list of equally sized rows; server account on its own page.
 
 ### Fixed
+- Shuffle/repeat on the lock screen player have a larger touch area, so a slightly-off tap no
+  longer counts as "tap empty area" and closes the player. Reordering the queue for shuffle can
+  no longer crash the app.
 - Layout no longer jumps: the mini player, the connection card, the sync status and the rating
   row in the player always keep the same size.
 

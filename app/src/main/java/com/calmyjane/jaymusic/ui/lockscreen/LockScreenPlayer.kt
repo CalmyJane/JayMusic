@@ -560,19 +560,30 @@ private fun BigButton(
     }
 }
 
+/**
+ * Shuffle/repeat toggle. The touch area is the full height of the play bar and wider than the
+ * icon, so a slightly-off tap still hits it instead of the "tap empty area to close" background.
+ */
 @Composable
 private fun SmallToggle(icon: ImageVector, label: String, active: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(14.dp)
     Box(
         Modifier
-            .size(56.dp)
-            .background(if (active) Color.White else Color.Black, shape)
-            .border(2.dp, if (active) Color.White else DimGray, shape)
+            .width(68.dp)
+            .fillMaxHeight()
             .clickable(onClick = onClick)
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = null, tint = if (active) Color.Black else Color.White, modifier = Modifier.size(28.dp))
+        Box(
+            Modifier
+                .size(52.dp)
+                .background(if (active) Color.White else Color.Black, shape)
+                .border(2.dp, if (active) Color.White else DimGray, shape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = null, tint = if (active) Color.Black else Color.White, modifier = Modifier.size(26.dp))
+        }
     }
 }
 

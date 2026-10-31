@@ -74,7 +74,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import com.calmyjane.jaymusic.BuildConfig
+import com.calmyjane.jaymusic.CrashLog
 import com.calmyjane.jaymusic.data.ThemeMode
 import com.calmyjane.jaymusic.playback.LockScreenLauncher
 import com.calmyjane.jaymusic.remote.ServerConnection
@@ -182,6 +185,8 @@ fun SettingsScreen(
                 ) { Text(label) }
             }
         }
+
+        ErrorReportRow()
 
         Text(
             "JayMusic ${BuildConfig.VERSION_NAME}",
@@ -356,6 +361,41 @@ private fun PermissionRow(title: String, granted: Boolean, onGrant: () -> Unit) 
         subtitle = if (granted) "Allowed" else "Tap to allow",
         onClick = { if (!granted) onGrant() },
     )
+}
+
+/** Shows the last crash / error (if any) so it can be copied into a bug report. */
+@Composable
+private fun ErrorReportRow() {
+    var report by remember { mutableStateOf(CrashLog.read()) }
+    var open by remember { mutableStateOf(false) }
+    val clipboard = LocalClipboardManager.current
+    if (report.isEmpty()) return
+    SectionHeader("Problems")
+    SettingRow(
+        icon = Icons.Filled.ErrorOutline,
+        title = "Error report",
+        subtitle = report.lineSequence().firstOrNull().orEmpty().removePrefix("=== "),
+        onClick = { open = true },
+    )
+    if (open) {
+        AlertDialog(
+            onDismissRequest = { open = false },
+            title = { Text("Error report") },
+            text = {
+                Text(
+                    report,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.height(360.dp).verticalScroll(rememberScrollState()),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { clipboard.setText(AnnotatedString(report)); open = false }) { Text("Copy") }
+            },
+            dismissButton = {
+                TextButton(onClick = { CrashLog.clear(); report = ""; open = false }) { Text("Clear") }
+            },
+        )
+    }
 }
 
 private fun connectionSummary(state: ServerConnection.State): String = when (state) {
