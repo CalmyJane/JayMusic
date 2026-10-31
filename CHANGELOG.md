@@ -20,6 +20,9 @@ All notable changes are documented here. The format follows
 - Player bar at the bottom: shuffle, previous, play, next and repeat, a seek slider (also while
   paused) and a lock button that opens the big lock screen player (it then stays on the lock
   screen after pressing the power button).
+- Lock screen queue: long song names scroll; hold and drag to reorder (auto-scrolls at the
+  edges, works with shuffle); hold without moving for a menu (play now, add to playlist, never
+  download, remove from queue). The progress bar is now a seek slider.
 - Lock screen player: no title header (it is in the queue), previous/next moved to the top,
   more room for the queue.
 - Library: slim icon bar (songs/folders, sort and filter menu, search) instead of search

@@ -222,6 +222,41 @@ class PlaybackService : MediaSessionService() {
         return false
     }
 
+    /** The queue indices in the order they will be played (shuffle order if shuffle is on). */
+    private fun playOrder(): MutableList<Int> {
+        val timeline = player.currentTimeline
+        val order = ArrayList<Int>(player.mediaItemCount)
+        var i = timeline.getFirstWindowIndex(player.shuffleModeEnabled)
+        while (i != C.INDEX_UNSET && order.size < player.mediaItemCount) {
+            order += i
+            i = timeline.getNextWindowIndex(i, Player.REPEAT_MODE_OFF, player.shuffleModeEnabled)
+        }
+        return order
+    }
+
+    /** Drag and drop in the queue view: puts [from] before or after [to] in play order. */
+    private fun moveInPlayOrder(from: Int, to: Int, after: Boolean) {
+        val count = player.mediaItemCount
+        if (from !in 0 until count || to !in 0 until count || from == to) return
+        if (player.shuffleModeEnabled) {
+            val order = playOrder()
+            if (order.size != count) return
+            order.remove(from)
+            order.add(order.indexOf(to) + if (after) 1 else 0, from)
+            player.setShuffleOrder(DefaultShuffleOrder(order.toIntArray(), System.nanoTime()))
+        } else {
+            // moveMediaItem inserts at the index in the list without the moved item, which is
+            // exactly "after to" when moving down and "before to" when moving up.
+            val target = when {
+                after && from > to -> to + 1
+                !after && from < to -> to - 1
+                else -> to
+            }
+            player.moveMediaItem(from, target)
+        }
+        schedulePrefetch()
+    }
+
     /** In shuffle mode, moves the item at [index] directly behind the current song in play order. */
     private fun makeNextInShuffle(index: Int) {
         if (!player.shuffleModeEnabled || index !in 0 until player.mediaItemCount) return
@@ -271,6 +306,7 @@ class PlaybackService : MediaSessionService() {
                 .add(SessionCommand(CMD_SHUFFLE_OFF, Bundle.EMPTY))
                 .add(SessionCommand(CMD_CYCLE_REPEAT, Bundle.EMPTY))
                 .add(SessionCommand(CMD_MAKE_NEXT, Bundle.EMPTY))
+                .add(SessionCommand(CMD_MOVE, Bundle.EMPTY))
                 .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(commands)
@@ -285,6 +321,7 @@ class PlaybackService : MediaSessionService() {
         ): ListenableFuture<SessionResult> {
             when (customCommand.customAction) {
                 CMD_MAKE_NEXT -> makeNextInShuffle(args.getInt(EXTRA_INDEX, -1))
+                CMD_MOVE -> moveInPlayOrder(args.getInt(EXTRA_FROM, -1), args.getInt(EXTRA_INDEX, -1), args.getBoolean(EXTRA_AFTER))
                 CMD_SHUFFLE_ON -> player.shuffleModeEnabled = true
                 CMD_SHUFFLE_OFF -> player.shuffleModeEnabled = false
                 CMD_CYCLE_REPEAT -> player.repeatMode = when (player.repeatMode) {
@@ -603,7 +640,10 @@ class PlaybackService : MediaSessionService() {
         const val CMD_SHUFFLE_OFF = "jaymusic.SHUFFLE_OFF"
         const val CMD_CYCLE_REPEAT = "jaymusic.CYCLE_REPEAT"
         const val CMD_MAKE_NEXT = "jaymusic.MAKE_NEXT"
+        const val CMD_MOVE = "jaymusic.MOVE"
         const val EXTRA_INDEX = "index"
+        const val EXTRA_FROM = "from"
+        const val EXTRA_AFTER = "after"
 
         private const val STALL_TIMEOUT_MS = 8_000L
         private const val PREFETCH_DEBOUNCE_MS = 700L

@@ -32,6 +32,8 @@ data class PlayerUiState(
     val shuffle: Boolean = false,
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
     val queueSize: Int = 0,
+    /** Changes whenever the queue or its order changes, so queue views refresh. */
+    val queueVersion: Int = 0,
 ) {
     val hasMedia: Boolean get() = currentPath != null
 
@@ -40,7 +42,8 @@ data class PlayerUiState(
         connected == other.connected && currentPath == other.currentPath && title == other.title &&
         artist == other.artist && album == other.album && artwork === other.artwork &&
         isPlaying == other.isPlaying && isBuffering == other.isBuffering && durationMs == other.durationMs &&
-        shuffle == other.shuffle && repeatMode == other.repeatMode && queueSize == other.queueSize
+        shuffle == other.shuffle && repeatMode == other.repeatMode && queueSize == other.queueSize &&
+        queueVersion == other.queueVersion
 
     override fun hashCode(): Int = currentPath.hashCode() * 31 + isPlaying.hashCode()
 }
@@ -66,10 +69,14 @@ class PlayerConnection(
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
 
     private var controller: MediaController? = null
+    private var queueVersion = 0
     private val pending = mutableListOf<(MediaController) -> Unit>()
 
     private val listener = object : Player.Listener {
-        override fun onEvents(player: Player, events: Player.Events) = publish(player)
+        override fun onEvents(player: Player, events: Player.Events) {
+            if (events.contains(Player.EVENT_TIMELINE_CHANGED)) queueVersion++
+            publish(player)
+        }
     }
 
     fun connect() {
@@ -113,6 +120,7 @@ class PlayerConnection(
             shuffle = player.shuffleModeEnabled,
             repeatMode = player.repeatMode,
             queueSize = player.mediaItemCount,
+            queueVersion = queueVersion,
         )
     }
 
@@ -238,6 +246,23 @@ class PlayerConnection(
         }
         return result
     }
+
+    /**
+     * Moves the song at queue index [from] next to the song at [to] in play order: after it when
+     * [after], else before it. Works with and without shuffle.
+     */
+    fun moveInQueue(from: Int, to: Int, after: Boolean) = withController {
+        it.sendCustomCommand(
+            SessionCommand(PlaybackService.CMD_MOVE, Bundle.EMPTY),
+            Bundle().apply {
+                putInt(PlaybackService.EXTRA_FROM, from)
+                putInt(PlaybackService.EXTRA_INDEX, to)
+                putBoolean(PlaybackService.EXTRA_AFTER, after)
+            },
+        )
+    }
+
+    fun removeFromQueue(index: Int) = withController { it.removeMediaItem(index) }
 
     fun skipToQueueIndex(index: Int) = withController { it.seekTo(index, 0) }
 }

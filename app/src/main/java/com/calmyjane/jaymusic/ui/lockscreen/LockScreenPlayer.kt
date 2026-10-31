@@ -1,6 +1,19 @@
 package com.calmyjane.jaymusic.ui.lockscreen
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.RemoveCircleOutline
+import androidx.compose.material.icons.outlined.CloudDownload
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.draw.zIndex
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -110,6 +123,7 @@ fun LockScreenPlayer(
     val track = state.currentPath?.let(index::get)
     var searching by rememberSaveable { mutableStateOf(false) }
     var playlistFor by remember { mutableStateOf<TrackEntity?>(null) }
+    var menuFor by remember { mutableStateOf<PlayerConnection.QueueEntry?>(null) }
     val swipeThreshold = with(LocalDensity.current) { 80.dp.toPx() }
 
     Box(
@@ -157,7 +171,7 @@ fun LockScreenPlayer(
             Progress(player, state.isPlaying, state.currentPath, state.durationMs)
 
             // Up next.
-            QueueList(player, state, Modifier.weight(1.5f).fillMaxWidth())
+            QueueList(player, state, Modifier.weight(1.5f).fillMaxWidth(), onMenu = { menuFor = it })
 
             // Play/pause bar with small toggles.
             Row(
@@ -206,6 +220,9 @@ fun LockScreenPlayer(
         }
     }
 
+    menuFor?.let { entry ->
+        QueueEntryMenu(container, entry, scope, player, onAddToPlaylist = { playlistFor = it }, onDismiss = { menuFor = null })
+    }
     playlistFor?.let { selected ->
         PlaylistPicker(
             container = container,
@@ -225,9 +242,12 @@ fun LockScreenPlayer(
     }
 }
 
+/** Seek bar: drag anywhere to jump in the song, also while paused. */
 @Composable
 private fun Progress(player: PlayerConnection, isPlaying: Boolean, path: String?, durationMs: Long) {
     var position by remember { mutableLongStateOf(player.positionMs()) }
+    var seeking by remember { mutableStateOf(false) }
+    var seekValue by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(isPlaying, path) {
         position = player.positionMs()
         while (isPlaying) {
@@ -235,38 +255,157 @@ private fun Progress(player: PlayerConnection, isPlaying: Boolean, path: String?
             position = player.positionMs()
         }
     }
-    Column(Modifier.fillMaxWidth().height(32.dp), verticalArrangement = Arrangement.Center) {
-        LinearProgressIndicator(
-            progress = { if (durationMs > 0) (position.toFloat() / durationMs).coerceIn(0f, 1f) else 0f },
-            modifier = Modifier.fillMaxWidth().height(4.dp),
-            color = Color.White,
-            trackColor = Color(0xFF303030),
-            drawStopIndicator = {},
+    val duration = durationMs.coerceAtLeast(1)
+    Column(Modifier.fillMaxWidth().height(52.dp), verticalArrangement = Arrangement.Center) {
+        Slider(
+            value = if (seeking) seekValue else (position.toFloat() / duration).coerceIn(0f, 1f),
+            onValueChange = { seeking = true; seekValue = it },
+            onValueChangeFinished = {
+                val target = (seekValue * duration).toLong()
+                player.seekTo(target)
+                position = target
+                seeking = false
+            },
+            colors = SliderDefaults.colors(
+                thumbColor = Color.White,
+                activeTrackColor = Color.White,
+                inactiveTrackColor = Color(0xFF303030),
+            ),
+            modifier = Modifier.fillMaxWidth().height(32.dp),
         )
-        Row(Modifier.fillMaxWidth().padding(top = 2.dp)) {
-            Text(formatDuration(position), style = MaterialTheme.typography.labelSmall, color = Gray)
+        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+            Text(formatDuration(if (seeking) (seekValue * duration).toLong() else position), style = MaterialTheme.typography.labelSmall, color = Gray)
             Spacer(Modifier.weight(1f))
             Text(formatDuration(durationMs), style = MaterialTheme.typography.labelSmall, color = Gray)
         }
     }
 }
 
+/**
+ * "Up next": tap to jump, long-press and drag to reorder (the list scrolls when dragging to an
+ * edge), long-press without moving for the song menu.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun QueueList(player: PlayerConnection, state: com.calmyjane.jaymusic.playback.PlayerUiState, modifier: Modifier) {
-    // Re-read whenever the player state changes (new song, shuffle, queue edits).
-    val entries = remember(state) { player.upcoming(50) }
+private fun QueueList(
+    player: PlayerConnection,
+    state: com.calmyjane.jaymusic.playback.PlayerUiState,
+    modifier: Modifier,
+    onMenu: (PlayerConnection.QueueEntry) -> Unit,
+) {
+    val entries = remember(state) { player.upcoming(80) }
+    var display by remember(entries) { mutableStateOf(entries) }
     val listState = rememberLazyListState()
-    LaunchedEffect(state.currentPath) { listState.scrollToItem(0) }
-    Column(modifier.border(1.dp, DimGray, RoundedCornerShape(12.dp))) {
-        Row(Modifier.fillMaxWidth().height(32.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+    var draggingKey by remember { mutableStateOf<String?>(null) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    var dragDistance by remember { mutableFloatStateOf(0f) }
+    val edge = with(LocalDensity.current) { 56.dp.toPx() }
+    val moveSlop = with(LocalDensity.current) { 12.dp.toPx() }
+    LaunchedEffect(state.currentPath) { if (draggingKey == null) listState.scrollToItem(0) }
+
+    fun keyOf(e: PlayerConnection.QueueEntry) = "${e.index}:${e.mediaId}"
+
+    /** Swaps the dragged row with the row under its center. */
+    fun swapIfNeeded() {
+        val info = listState.layoutInfo.visibleItemsInfo
+        val dragged = info.firstOrNull { it.key == draggingKey } ?: return
+        val center = dragged.offset + dragOffset + dragged.size / 2
+        val target = info.firstOrNull {
+            it.key != draggingKey && it.index >= 1 && center.toInt() in it.offset..(it.offset + it.size)
+        } ?: return
+        display = display.toMutableList().apply { add(target.index, removeAt(dragged.index)) }
+        dragOffset += dragged.offset - target.offset
+    }
+
+    // Auto-scroll while a row is dragged near the top or bottom edge.
+    LaunchedEffect(draggingKey) {
+        while (draggingKey != null) {
+            val info = listState.layoutInfo
+            val dragged = info.visibleItemsInfo.firstOrNull { it.key == draggingKey }
+            if (dragged != null) {
+                val top = dragged.offset + dragOffset
+                val bottom = top + dragged.size
+                val speed = when {
+                    top < info.viewportStartOffset + edge -> -12f
+                    bottom > info.viewportEndOffset - edge -> 12f
+                    else -> 0f
+                }
+                if (speed != 0f) {
+                    val consumed = listState.scrollBy(speed)
+                    dragOffset += consumed
+                    swapIfNeeded()
+                }
+            }
+            delay(16)
+        }
+    }
+
+    Column(
+        modifier
+            .border(1.dp, DimGray, RoundedCornerShape(12.dp))
+            // Taps and long presses inside the queue must not close the player.
+            .pointerInput(Unit) { detectTapGestures { } },
+    ) {
+        Row(Modifier.fillMaxWidth().height(28.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = null, tint = Gray, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
-            Text("UP NEXT", style = MaterialTheme.typography.labelMedium, color = Gray)
+            Text("UP NEXT  ·  hold to move", style = MaterialTheme.typography.labelSmall, color = Gray)
         }
-        LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-            items(entries, key = { "${it.index}:${it.mediaId}" }) { entry ->
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize().pointerInput(entries) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { offset ->
+                        val item = listState.layoutInfo.visibleItemsInfo.firstOrNull {
+                            offset.y.toInt() in it.offset..(it.offset + it.size)
+                        }
+                        draggingKey = item?.key as? String
+                        dragOffset = 0f
+                        dragDistance = 0f
+                    },
+                    onDrag = { change, amount ->
+                        change.consume()
+                        dragDistance += kotlin.math.abs(amount.y)
+                        // The playing song stays on top.
+                        if (draggingKey != null && display.firstOrNull()?.let(::keyOf) != draggingKey) {
+                            dragOffset += amount.y
+                            swapIfNeeded()
+                        }
+                    },
+                    onDragEnd = {
+                        val key = draggingKey
+                        draggingKey = null
+                        dragOffset = 0f
+                        val entry = entries.firstOrNull { keyOf(it) == key } ?: return@detectDragGesturesAfterLongPress
+                        if (dragDistance < moveSlop) {
+                            onMenu(entry)
+                            return@detectDragGesturesAfterLongPress
+                        }
+                        val oldPos = entries.indexOf(entry)
+                        val newPos = display.indexOfFirst { keyOf(it) == key }
+                        if (newPos >= 1 && newPos != oldPos) {
+                            player.moveInQueue(entry.index, entries[newPos].index, after = newPos > oldPos)
+                        }
+                    },
+                    onDragCancel = {
+                        draggingKey = null
+                        dragOffset = 0f
+                        display = entries
+                    },
+                )
+            },
+        ) {
+            items(display, key = { keyOf(it) }) { entry ->
+                val dragging = keyOf(entry) == draggingKey
                 Row(
-                    Modifier.fillMaxWidth().height(52.dp).clickable { player.skipToQueueIndex(entry.index) }.padding(horizontal = 12.dp),
+                    Modifier
+                        .zIndex(if (dragging) 1f else 0f)
+                        .graphicsLayer { translationY = if (dragging) dragOffset else 0f }
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .background(if (dragging) Color(0xFF262626) else Color.Black)
+                        .clickable { player.skipToQueueIndex(entry.index) }
+                        .padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (entry.isCurrent) {
@@ -280,13 +419,75 @@ private fun QueueList(player: PlayerConnection, state: com.calmyjane.jaymusic.pl
                             fontWeight = if (entry.isCurrent) FontWeight.Black else FontWeight.Medium,
                             color = Color.White,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                            // Long names scroll by instead of being cut off.
+                            modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE),
                         )
-                        Text(entry.artist, style = MaterialTheme.typography.bodySmall, color = Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            entry.artist,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Gray,
+                            maxLines = 1,
+                            modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE),
+                        )
+                    }
+                    if (!entry.isCurrent) {
+                        Icon(Icons.Filled.DragHandle, contentDescription = null, tint = DimGray, modifier = Modifier.size(20.dp))
                     }
                 }
             }
         }
+    }
+}
+
+/** Menu for a song in the queue (long-press without moving). */
+@Composable
+private fun QueueEntryMenu(
+    container: AppContainer,
+    entry: PlayerConnection.QueueEntry,
+    scope: CoroutineScope,
+    player: PlayerConnection,
+    onAddToPlaylist: (TrackEntity) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val rules by container.library.folderRules.collectAsStateWithLifecycle()
+    val index by container.library.trackIndex.collectAsStateWithLifecycle()
+    val track = index[entry.mediaId]
+    val excludedBy = rules.excludedBy(entry.mediaId)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(entry.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        text = {
+            Column {
+                MenuRow(Icons.Filled.PlayArrow, "Play now") { player.skipToQueueIndex(entry.index); onDismiss() }
+                if (track != null) {
+                    MenuRow(Icons.AutoMirrored.Filled.PlaylistAdd, "Add to playlist") { onDismiss(); onAddToPlaylist(track) }
+                }
+                when {
+                    excludedBy == null -> MenuRow(Icons.Filled.CloudOff, "Never download") {
+                        scope.launch { container.library.setFolderExcluded(entry.mediaId, true) }
+                        onDismiss()
+                    }
+                    excludedBy == entry.mediaId -> MenuRow(Icons.Outlined.CloudDownload, "Allow download") {
+                        scope.launch { container.library.setFolderExcluded(entry.mediaId, false) }
+                        onDismiss()
+                    }
+                    else -> Text("Never downloaded (folder ${excludedBy.substringAfterLast('/')})", color = Gray)
+                }
+                if (!entry.isCurrent) {
+                    MenuRow(Icons.Filled.RemoveCircleOutline, "Remove from queue") { player.removeFromQueue(entry.index); onDismiss() }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
+}
+
+@Composable
+private fun MenuRow(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().height(52.dp).clickable(onClick = onClick), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, contentDescription = null)
+        Spacer(Modifier.width(16.dp))
+        Text(label, style = MaterialTheme.typography.titleMedium)
     }
 }
 
