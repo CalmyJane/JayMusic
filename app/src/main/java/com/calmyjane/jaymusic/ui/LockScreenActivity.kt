@@ -35,8 +35,17 @@ class LockScreenActivity : ComponentActivity() {
 
     private val unlockReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == Intent.ACTION_USER_PRESENT) finish()
+            // Opened automatically: get out of the way once the phone is unlocked. Opened from the
+            // app's lock button: stay until the user swipes it away.
+            if (intent.action == Intent.ACTION_USER_PRESENT && !stayAfterUnlock) finish()
         }
+    }
+
+    private val stayAfterUnlock: Boolean get() = intent.getBooleanExtra(EXTRA_STAY, false)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -122,7 +131,12 @@ class LockScreenActivity : ComponentActivity() {
         var lastCreatedAt = 0L
             private set
 
-        fun intent(context: Context): Intent = Intent(context, LockScreenActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
+        private const val EXTRA_STAY = "stay_after_unlock"
+
+        /** @param stayAfterUnlock keep showing after the phone is unlocked (opened by the user). */
+        fun intent(context: Context, stayAfterUnlock: Boolean = false): Intent =
+            Intent(context, LockScreenActivity::class.java)
+                .putExtra(EXTRA_STAY, stayAfterUnlock)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
     }
 }

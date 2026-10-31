@@ -2,11 +2,13 @@
 
 ## Playing music
 
-- **Library › Songs**: all songs with search (title, artist, album), sort options and the
-  **On phone** filter (downloaded songs only). Tap a song to play the list from there; **Play** /
-  **Shuffle** play the whole (filtered) list.
-- **Library › Folders**: browse the NAS folder structure.
-- **Mini player** (bottom): tap it to open the full screen player.
+- **Library**: the bar at the top switches between songs (♪) and folders (folder icon), and has
+  the sort menu, the *on phone* filter (downloaded songs only) and the search (magnifier). Tap a
+  song to play the list from there.
+- **Player bar** (bottom): song and time (tap to open the full screen player), a seek slider
+  that works while playing or paused, and shuffle / previous / play / next / repeat. The lock
+  button opens the big lock screen player: press the power button afterwards and it is the first
+  thing you see when you turn the screen on again.
 - **Full screen player**: very large previous / play / next buttons, shuffle and repeat toggles
   (filled = on), seek bar and the song's rating.
 - **Big lock screen player**: when you turn the screen on while music plays and the phone is

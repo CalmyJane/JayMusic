@@ -89,7 +89,7 @@ fun TrackRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 64.dp)
+            .heightIn(min = 54.dp)
             .combinedClickable(onClick = onClick, onLongClick = onMore)
             .padding(start = 16.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -98,10 +98,10 @@ fun TrackRow(
             Icon(Icons.Filled.Equalizer, contentDescription = "Playing", modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(12.dp))
         }
-        Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
+        Column(Modifier.weight(1f).padding(vertical = 4.dp)) {
             Text(
                 text = track.title,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.bodyLarge,
                 fontWeight = if (isCurrent) FontWeight.Black else FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

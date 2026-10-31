@@ -14,6 +14,11 @@ All notable changes are documented here. The format follows
 - Tapping the connection card shows the error for every address tried.
 
 ### Changed
+- Player bar at the bottom: shuffle, previous, play, next and repeat, a seek slider (also while
+  paused) and a lock button that opens the big lock screen player (it then stays on the lock
+  screen after pressing the power button).
+- Library: slim icon bar (songs/folders, sort menu, "on phone" filter, search) instead of search
+  field, chips and play/shuffle buttons; denser song list.
 - Lock screen player redesigned after car-mode players: huge previous/next at the top, queue
   ("up next") in the middle, a wide play/pause bar with small shuffle/repeat toggles, quick
   search (play now, play next, add to playlist), add current song to playlist and rating.

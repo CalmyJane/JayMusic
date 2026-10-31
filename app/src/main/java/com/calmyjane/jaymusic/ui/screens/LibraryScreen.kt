@@ -1,6 +1,22 @@
 package com.calmyjane.jaymusic.ui.screens
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -57,69 +73,108 @@ import com.calmyjane.jaymusic.ui.components.TrackRow
 @Composable
 fun LibraryScreen(vm: MainViewModel, contentPadding: PaddingValues) {
     var mode by rememberSaveable { mutableIntStateOf(0) }
-    Column(Modifier.fillMaxSize().padding(contentPadding)) {
-        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-            listOf("Songs", "Folders").forEachIndexed { i, label ->
-                SegmentedButton(
-                    selected = mode == i,
-                    onClick = { mode = i },
-                    shape = SegmentedButtonDefaults.itemShape(i, 2),
-                ) { Text(label) }
-            }
-        }
-        if (mode == 0) SongsList(vm) else FolderBrowser(vm)
-    }
-}
-
-@Composable
-private fun SongsList(vm: MainViewModel) {
-    val songs by vm.songs.collectAsStateWithLifecycle()
+    var searching by rememberSaveable { mutableStateOf(false) }
     val filter by vm.songFilter.collectAsStateWithLifecycle()
     val allCount = vm.allTracks.collectAsStateWithLifecycle().value.size
 
-    Column {
-        OutlinedTextField(
-            value = filter.query,
-            onValueChange = { q -> vm.songFilter.value = filter.copy(query = q) },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            singleLine = true,
-            placeholder = { Text("Search songs, artists, albums") },
-            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-            trailingIcon = {
+    Column(Modifier.fillMaxSize().padding(contentPadding)) {
+        // One slim bar: view switch, sort, "on phone" filter and search.
+        Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (searching) {
+                val focus = remember { FocusRequester() }
+                LaunchedEffect(Unit) { focus.requestFocus() }
+                IconButton(onClick = {
+                    searching = false
+                    vm.songFilter.value = filter.copy(query = "")
+                }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close search") }
+                BasicSearchField(
+                    value = filter.query,
+                    onValueChange = { q -> vm.songFilter.value = filter.copy(query = q) },
+                    modifier = Modifier.weight(1f).focusRequester(focus),
+                )
                 if (filter.query.isNotEmpty()) {
                     IconButton(onClick = { vm.songFilter.value = filter.copy(query = "") }) {
                         Icon(Icons.Filled.Clear, contentDescription = "Clear search")
                     }
                 }
-            },
-        )
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            item {
-                FilterChip(
-                    selected = filter.downloadedOnly,
-                    onClick = { vm.songFilter.value = filter.copy(downloadedOnly = !filter.downloadedOnly) },
-                    label = { Text("On phone") },
-                    leadingIcon = { Icon(Icons.Filled.DownloadDone, contentDescription = null) },
-                )
-            }
-            items(SongSort.entries) { sort ->
-                FilterChip(
-                    selected = filter.sort == sort,
-                    onClick = { vm.songFilter.value = filter.copy(sort = sort) },
-                    label = { Text(sort.label) },
-                )
+            } else {
+                ViewToggle(Icons.Filled.MusicNote, "Songs", mode == 0) { mode = 0 }
+                ViewToggle(Icons.Filled.Folder, "Folders", mode == 1) { mode = 1 }
+                Spacer(Modifier.weight(1f))
+                SortMenu(filter.sort) { vm.songFilter.value = filter.copy(sort = it) }
+                ViewToggle(Icons.Filled.DownloadDone, "Only songs on this phone", filter.downloadedOnly) {
+                    vm.songFilter.value = filter.copy(downloadedOnly = !filter.downloadedOnly)
+                }
+                IconButton(onClick = { searching = true; mode = 0 }) {
+                    Icon(Icons.Filled.Search, contentDescription = "Search")
+                }
             }
         }
-        PlayButtons(vm, songs)
-        if (allCount == 0) {
-            EmptyHint("No songs yet. Set up your Synology in Settings, then tap “Sync now”.")
-        } else {
-            TrackList(vm, songs)
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        when {
+            allCount == 0 -> EmptyHint("No songs yet. Set up your Synology in Settings, then tap “Sync now”.")
+            mode == 0 || searching -> TrackList(vm, vm.songs.collectAsStateWithLifecycle().value)
+            else -> FolderBrowser(vm)
         }
     }
+}
+
+/** Icon button that is drawn inverted while [selected]. */
+@Composable
+private fun ViewToggle(icon: ImageVector, description: String, selected: Boolean, onClick: () -> Unit) {
+    val colors = if (selected) {
+        IconButtonDefaults.filledIconButtonColors(
+            containerColor = MaterialTheme.colorScheme.onBackground,
+            contentColor = MaterialTheme.colorScheme.background,
+        )
+    } else {
+        IconButtonDefaults.filledIconButtonColors(
+            containerColor = MaterialTheme.colorScheme.background,
+            contentColor = MaterialTheme.colorScheme.onBackground,
+        )
+    }
+    FilledIconButton(onClick = onClick, colors = colors, modifier = Modifier.size(44.dp).semantics { contentDescription = description }) {
+        Icon(icon, contentDescription = null)
+    }
+}
+
+@Composable
+private fun SortMenu(current: SongSort, onSelect: (SongSort) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }) {
+            Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort: ${current.label}")
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            SongSort.entries.forEach { sort ->
+                DropdownMenuItem(
+                    text = { Text(sort.label) },
+                    onClick = { onSelect(sort); open = false },
+                    trailingIcon = { if (sort == current) Icon(Icons.Filled.Check, contentDescription = "Selected") },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BasicSearchField(value: String, onValueChange: (String) -> Unit, modifier: Modifier) {
+    androidx.compose.foundation.text.BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        singleLine = true,
+        textStyle = MaterialTheme.typography.titleMedium.copy(color = MaterialTheme.colorScheme.onBackground),
+        cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.onBackground),
+        modifier = modifier,
+        decorationBox = { inner ->
+            Box(contentAlignment = Alignment.CenterStart) {
+                if (value.isEmpty()) {
+                    Text("Search songs, artists, albums", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                inner()
+            }
+        },
+    )
 }
 
 /** "Play" plus the shuffle switch. Shuffle only decides whether the next song is random. */
@@ -252,9 +307,6 @@ private fun FolderBrowser(vm: MainViewModel) {
                             )
                         }
                     }
-                }
-                if (songs.isNotEmpty()) {
-                    PlayButtons(vm, songs)
                 }
             }
         })

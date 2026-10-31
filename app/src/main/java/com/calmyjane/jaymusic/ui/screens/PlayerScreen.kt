@@ -1,6 +1,11 @@
 package com.calmyjane.jaymusic.ui.screens
 
 import android.graphics.BitmapFactory
+import androidx.compose.material.icons.filled.ScreenLockPortrait
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import com.calmyjane.jaymusic.ui.LockScreenActivity
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -91,52 +96,129 @@ private fun rememberArtwork(data: ByteArray?): ImageBitmap? = remember(data) {
     data?.let { runCatching { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }.getOrNull() }
 }
 
+/**
+ * Player bar at the bottom of the app: song (tap to open the full player), a seek slider that
+ * works while playing or paused, and shuffle / previous / play / next / repeat. The lock button
+ * opens the big lock screen player; press the power button afterwards and it stays on the lock
+ * screen. Always the same height so the layout never jumps.
+ */
 @Composable
 fun MiniPlayer(vm: MainViewModel, onOpen: () -> Unit) {
     val state by vm.player.state.collectAsStateWithLifecycle()
-    // Always shown with the same height, also when nothing is playing, so the layout never jumps.
     val position = rememberPosition(vm, state)
+    val context = LocalContext.current
+    var seeking by remember { mutableStateOf(false) }
+    var seekValue by remember { mutableFloatStateOf(0f) }
+    val duration = state.durationMs.coerceAtLeast(1)
+
     Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerHigh)) {
-        LinearProgressIndicator(
-            progress = { if (state.durationMs > 0) (position.toFloat() / state.durationMs).coerceIn(0f, 1f) else 0f },
-            modifier = Modifier.fillMaxWidth().height(2.dp),
-            drawStopIndicator = {},
-        )
         Row(
-            Modifier.fillMaxWidth().height(72.dp).clickable(enabled = state.hasMedia, onClick = onOpen)
+            Modifier.fillMaxWidth().height(48.dp).clickable(enabled = state.hasMedia, onClick = onOpen)
                 .padding(start = 16.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
                     if (state.hasMedia) state.title else "Nothing playing",
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleSmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    if (state.hasMedia) state.artist else "Pick a song in your library",
-                    style = MaterialTheme.typography.bodyMedium,
+                    if (state.hasMedia) state.artist else " ",
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            IconButton(onClick = vm.player::togglePlayPause, enabled = state.hasMedia, modifier = Modifier.size(56.dp)) {
+            Text(
+                "${formatDuration(if (seeking) (seekValue * duration).toLong() else position)} / ${formatDuration(state.durationMs)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            IconButton(
+                onClick = { context.startActivity(LockScreenActivity.intent(context, stayAfterUnlock = true)) },
+                enabled = state.hasMedia,
+            ) {
+                Icon(Icons.Filled.ScreenLockPortrait, contentDescription = "Open lock screen player")
+            }
+        }
+        Slider(
+            value = if (seeking) seekValue else (position.toFloat() / duration).coerceIn(0f, 1f),
+            onValueChange = { seeking = true; seekValue = it },
+            onValueChangeFinished = {
+                vm.player.seekTo((seekValue * duration).toLong())
+                seeking = false
+            },
+            enabled = state.hasMedia,
+            colors = SliderDefaults.colors(inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant),
+            modifier = Modifier.fillMaxWidth().height(24.dp).padding(horizontal = 12.dp),
+        )
+        Row(
+            Modifier.fillMaxWidth().height(68.dp).padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SmallModeButton(Icons.Filled.Shuffle, if (state.shuffle) "Shuffle on" else "Shuffle off", state.shuffle) {
+                vm.player.setShuffle(!state.shuffle)
+            }
+            IconButton(onClick = vm.player::previous, enabled = state.hasMedia, modifier = Modifier.size(60.dp)) {
+                Icon(Icons.Filled.SkipPrevious, contentDescription = "Previous", modifier = Modifier.size(44.dp))
+            }
+            FilledIconButton(
+                onClick = vm.player::togglePlayPause,
+                enabled = state.hasMedia,
+                shape = CircleShape,
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.onBackground,
+                    contentColor = MaterialTheme.colorScheme.background,
+                ),
+                modifier = Modifier.size(60.dp),
+            ) {
                 if (state.isBuffering) {
-                    CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 3.dp)
+                    CircularProgressIndicator(Modifier.size(28.dp), color = MaterialTheme.colorScheme.background, strokeWidth = 3.dp)
                 } else {
                     Icon(
                         if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                         contentDescription = if (state.isPlaying) "Pause" else "Play",
-                        modifier = Modifier.size(36.dp),
+                        modifier = Modifier.size(38.dp),
                     )
                 }
             }
-            IconButton(onClick = vm.player::next, enabled = state.hasMedia, modifier = Modifier.size(56.dp)) {
-                Icon(Icons.Filled.SkipNext, contentDescription = "Next", modifier = Modifier.size(36.dp))
+            IconButton(onClick = vm.player::next, enabled = state.hasMedia, modifier = Modifier.size(60.dp)) {
+                Icon(Icons.Filled.SkipNext, contentDescription = "Next", modifier = Modifier.size(44.dp))
             }
+            SmallModeButton(
+                if (state.repeatMode == Player.REPEAT_MODE_ONE) Icons.Filled.RepeatOne else Icons.Filled.Repeat,
+                when (state.repeatMode) {
+                    Player.REPEAT_MODE_ONE -> "Repeat one"
+                    Player.REPEAT_MODE_ALL -> "Repeat all"
+                    else -> "Repeat off"
+                },
+                state.repeatMode != Player.REPEAT_MODE_OFF,
+                onClick = vm.player::cycleRepeat,
+            )
         }
+    }
+}
+
+/** Small shuffle/repeat toggle, filled while active. */
+@Composable
+private fun SmallModeButton(icon: ImageVector, description: String, active: Boolean, onClick: () -> Unit) {
+    val colors = if (active) {
+        IconButtonDefaults.filledIconButtonColors(
+            containerColor = MaterialTheme.colorScheme.onBackground,
+            contentColor = MaterialTheme.colorScheme.background,
+        )
+    } else {
+        IconButtonDefaults.filledIconButtonColors(
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.onBackground,
+        )
+    }
+    FilledIconButton(onClick = onClick, colors = colors, modifier = Modifier.size(40.dp).semantics { contentDescription = description }) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
     }
 }
 

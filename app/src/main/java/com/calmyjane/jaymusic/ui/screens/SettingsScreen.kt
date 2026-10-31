@@ -333,7 +333,7 @@ fun LockScreenSettingsScreen(vm: MainViewModel, contentPadding: PaddingValues, o
         }
 
         Button(
-            onClick = { context.startActivity(LockScreenActivity.intent(context)) },
+            onClick = { context.startActivity(LockScreenActivity.intent(context, stayAfterUnlock = true)) },
             modifier = Modifier.fillMaxWidth().padding(16.dp).height(56.dp),
         ) { Text("Preview") }
 
