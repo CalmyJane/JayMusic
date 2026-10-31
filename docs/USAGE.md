@@ -47,7 +47,7 @@ playlist…**). In a playlist, a song's menu also offers *Move up*, *Move down* 
 | Background sync | Fills remaining space with the best rated songs, then most played. |
 | Storage limit reached | The worst rated songs are deleted first. Unrated songs count as 2.5 stars, so songs you rated 1–2 stars go before unrated ones, and 3–5 star songs are kept longest. Among equal ratings, the least recently played go first. |
 | Background sync and a full phone | A song is only downloaded if a *worse* rated song can be deleted for it, so the phone never churns. |
-| Excluded folder | Never stored (existing copies are deleted). Still streamable when online. |
+| "Never download" folder or song | Never stored (existing copies are deleted). Still streamable when online. Set it with the cloud icon in the folder view or in a song's menu; tap again to allow downloads. |
 
 The limit is set in **Settings › Storage**. JayMusic also always leaves 500 MB free on the phone.
 

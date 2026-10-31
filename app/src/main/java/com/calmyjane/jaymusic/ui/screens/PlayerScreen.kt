@@ -98,15 +98,12 @@ private fun rememberArtwork(data: ByteArray?): ImageBitmap? = remember(data) {
 
 /**
  * Player bar at the bottom of the app: song (tap to open the full player), a seek slider that
- * works while playing or paused, and shuffle / previous / play / next / repeat. The lock button
- * opens the big lock screen player; press the power button afterwards and it stays on the lock
- * screen. Always the same height so the layout never jumps.
+ * works while playing or paused, and shuffle / previous / play / next / repeat. Always the same height so the layout never jumps.
  */
 @Composable
 fun MiniPlayer(vm: MainViewModel, onOpen: () -> Unit) {
     val state by vm.player.state.collectAsStateWithLifecycle()
     val position = rememberPosition(vm, state)
-    val context = LocalContext.current
     var seeking by remember { mutableStateOf(false) }
     var seekValue by remember { mutableFloatStateOf(0f) }
     val duration = state.durationMs.coerceAtLeast(1)
@@ -137,12 +134,6 @@ fun MiniPlayer(vm: MainViewModel, onOpen: () -> Unit) {
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            IconButton(
-                onClick = { context.startActivity(LockScreenActivity.intent(context, stayAfterUnlock = true)) },
-                enabled = state.hasMedia,
-            ) {
-                Icon(Icons.Filled.ScreenLockPortrait, contentDescription = "Open lock screen player")
-            }
         }
         Slider(
             value = if (seeking) seekValue else (position.toFloat() / duration).coerceIn(0f, 1f),

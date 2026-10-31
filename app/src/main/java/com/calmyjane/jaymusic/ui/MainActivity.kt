@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.ScreenLockPortrait
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +35,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.size
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.calmyjane.jaymusic.ui.screens.ExclusionsScreen
 import com.calmyjane.jaymusic.ui.screens.LibraryScreen
@@ -87,6 +91,7 @@ private fun AppRoot(vm: MainViewModel) {
     var page by remember { mutableStateOf<Page?>(null) }
     var playerOpen by rememberSaveable { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     LaunchedEffect(Unit) {
         vm.messages.collect { snackbar.showSnackbar(it) }
@@ -123,6 +128,14 @@ private fun AppRoot(vm: MainViewModel) {
                                 ),
                             )
                         }
+                        // Not a tab: opens the big lock screen player. Press the power button
+                        // afterwards and it is what you see when the screen turns on.
+                        NavigationBarItem(
+                            selected = false,
+                            onClick = { context.startActivity(LockScreenActivity.intent(context, stayAfterUnlock = true)) },
+                            icon = { Icon(Icons.Filled.ScreenLockPortrait, contentDescription = null, modifier = Modifier.size(30.dp)) },
+                            label = { Text("Lock player") },
+                        )
                     }
                 }
             },

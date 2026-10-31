@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -67,6 +69,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.calmyjane.jaymusic.data.TrackEntity
 import com.calmyjane.jaymusic.ui.MainViewModel
 import com.calmyjane.jaymusic.ui.SongSort
+import com.calmyjane.jaymusic.ui.components.SheetAction
 import com.calmyjane.jaymusic.ui.components.TrackActionsSheet
 import com.calmyjane.jaymusic.ui.components.TrackRow
 
@@ -101,10 +104,12 @@ fun LibraryScreen(vm: MainViewModel, contentPadding: PaddingValues) {
                 ViewToggle(Icons.Filled.MusicNote, "Songs", mode == 0) { mode = 0 }
                 ViewToggle(Icons.Filled.Folder, "Folders", mode == 1) { mode = 1 }
                 Spacer(Modifier.weight(1f))
-                SortMenu(filter.sort) { vm.songFilter.value = filter.copy(sort = it) }
-                ViewToggle(Icons.Filled.DownloadDone, "Only songs on this phone", filter.downloadedOnly) {
-                    vm.songFilter.value = filter.copy(downloadedOnly = !filter.downloadedOnly)
-                }
+                SortMenu(
+                    current = filter.sort,
+                    downloadedOnly = filter.downloadedOnly,
+                    onSelect = { vm.songFilter.value = filter.copy(sort = it) },
+                    onToggleDownloadedOnly = { vm.songFilter.value = filter.copy(downloadedOnly = !filter.downloadedOnly) },
+                )
                 IconButton(onClick = { searching = true; mode = 0 }) {
                     Icon(Icons.Filled.Search, contentDescription = "Search")
                 }
@@ -138,14 +143,27 @@ private fun ViewToggle(icon: ImageVector, description: String, selected: Boolean
     }
 }
 
+/** Sort order plus the "only songs on this phone" filter. */
 @Composable
-private fun SortMenu(current: SongSort, onSelect: (SongSort) -> Unit) {
+private fun SortMenu(
+    current: SongSort,
+    downloadedOnly: Boolean,
+    onSelect: (SongSort) -> Unit,
+    onToggleDownloadedOnly: () -> Unit,
+) {
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }) {
-            Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort: ${current.label}")
+            Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort and filter")
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text("Only on this phone") },
+                onClick = { onToggleDownloadedOnly(); open = false },
+                leadingIcon = { Icon(Icons.Filled.DownloadDone, contentDescription = null) },
+                trailingIcon = { if (downloadedOnly) Icon(Icons.Filled.Check, contentDescription = "On") },
+            )
+            HorizontalDivider()
             SongSort.entries.forEach { sort ->
                 DropdownMenuItem(
                     text = { Text(sort.label) },
@@ -250,6 +268,8 @@ fun TrackMenu(vm: MainViewModel, track: TrackEntity, extraActions: @Composable (
     val playlists by vm.playlists.collectAsState()
     // Show the live rating while the sheet is open.
     val live = vm.trackIndex.collectAsState().value[track.path] ?: track
+    val rules by vm.folderRules.collectAsState()
+    val excludedBy = rules.excludedBy(track.path)
     TrackActionsSheet(
         track = live,
         playlists = playlists,
@@ -259,7 +279,21 @@ fun TrackMenu(vm: MainViewModel, track: TrackEntity, extraActions: @Composable (
         onAddToQueue = { vm.addToQueue(track) },
         onAddToPlaylist = { vm.addToPlaylist(it, track.path) },
         onCreatePlaylist = { vm.createPlaylist(it, track.path) },
-        extraActions = extraActions,
+        extraActions = {
+            extraActions()
+            when {
+                excludedBy == null -> SheetAction(Icons.Filled.CloudOff, "Never download") {
+                    vm.setFolderExcluded(track.path, true)
+                    onDismiss()
+                }
+                excludedBy == track.path -> SheetAction(Icons.Outlined.CloudDownload, "Allow download") {
+                    vm.setFolderExcluded(track.path, false)
+                    onDismiss()
+                }
+                // Excluded through its folder; that is changed in the folder view.
+                else -> Unit
+            }
+        },
     )
 }
 
@@ -291,25 +325,47 @@ private fun FolderBrowser(vm: MainViewModel) {
         TrackList(vm, songs, header = {
             Column {
                 for (node in folders) {
+                    val excludedBy = rules.excludedBy(node.path)
                     Row(
-                        Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { folder = node.path }
-                            .padding(horizontal = 16.dp),
+                        Modifier.fillMaxWidth().height(54.dp).clickable { folder = node.path }
+                            .padding(start = 16.dp, end = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(Icons.Filled.Folder, contentDescription = null)
                         Spacer(Modifier.width(16.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(node.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(node.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(
-                                "${node.songCount} songs" + if (rules.isExcluded(node.path)) " · not downloaded" else "",
+                                "${node.songCount} songs" + if (excludedBy != null) " · never downloaded" else "",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                        DownloadToggle(
+                            excluded = excludedBy != null,
+                            // Inherited from a parent folder: change it there.
+                            enabled = excludedBy == null || excludedBy == node.path,
+                            onToggle = { vm.setFolderExcluded(node.path, excludedBy == null) },
+                        )
                     }
                 }
             }
         })
+    }
+}
+
+/**
+ * Cloud icon showing whether songs may be stored on the phone. Tap to switch: a crossed-out cloud
+ * means "never download" (existing copies are deleted, streaming still works).
+ */
+@Composable
+fun DownloadToggle(excluded: Boolean, enabled: Boolean = true, onToggle: () -> Unit) {
+    IconButton(onClick = onToggle, enabled = enabled) {
+        Icon(
+            if (excluded) Icons.Filled.CloudOff else Icons.Outlined.CloudDownload,
+            contentDescription = if (excluded) "Never downloaded – tap to allow" else "Downloads allowed – tap to never download",
+            tint = if (excluded) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.outline,
+        )
     }
 }
 

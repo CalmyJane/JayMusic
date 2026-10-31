@@ -138,11 +138,11 @@ fun SettingsScreen(
         )
         SettingRow(
             icon = Icons.Filled.FolderOff,
-            title = "Excluded folders",
+            title = "Never downloaded",
             subtitle = when (val n = rules.excludedFolders.size) {
                 0 -> "None"
                 1 -> rules.excludedFolders.first()
-                else -> "$n folders"
+                else -> "$n folders and songs"
             },
             onClick = onOpenExclusions,
             trailing = { Chevron() },

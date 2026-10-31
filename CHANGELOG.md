@@ -7,6 +7,9 @@ All notable changes are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- "Never download" per folder (cloud icon in the folder view) and per song (song menu); existing
+  copies are deleted, and it can be switched back at any time.
+- "Lock player" button in the bottom navigation opens the lock screen player.
 - Big full screen lock screen player, opened via a full screen notification when the screen is
   turned on during playback; setup page with permission checklist, preview and a log of recent
   attempts. Android's own lock screen controls cannot be enlarged by apps.
@@ -17,7 +20,9 @@ All notable changes are documented here. The format follows
 - Player bar at the bottom: shuffle, previous, play, next and repeat, a seek slider (also while
   paused) and a lock button that opens the big lock screen player (it then stays on the lock
   screen after pressing the power button).
-- Library: slim icon bar (songs/folders, sort menu, "on phone" filter, search) instead of search
+- Lock screen player: no title header (it is in the queue), previous/next moved to the top,
+  more room for the queue.
+- Library: slim icon bar (songs/folders, sort and filter menu, search) instead of search
   field, chips and play/shuffle buttons; denser song list.
 - Lock screen player redesigned after car-mode players: huge previous/next at the top, queue
   ("up next") in the middle, a wide play/pause bar with small shuffle/repeat toggles, quick

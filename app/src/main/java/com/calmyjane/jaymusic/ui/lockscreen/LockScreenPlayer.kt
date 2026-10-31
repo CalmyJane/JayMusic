@@ -133,33 +133,23 @@ fun LockScreenPlayer(
         Column(
             Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 12.dp),
         ) {
-            // Song, rating, search, add to playlist.
-            Row(Modifier.fillMaxWidth().height(64.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f).padding(start = 4.dp)) {
-                    Text(
-                        state.title.ifEmpty { "Nothing playing" },
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(state.artist, style = MaterialTheme.typography.bodyMedium, color = Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // Slim top row: rating, add to playlist, search. The title is shown in the queue below.
+            Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) {
+                    if (track != null) {
+                        RatingBar(track.rating, { value -> scope.launch { container.library.setRating(track.path, value) } }, starSize = 26.dp)
+                    }
                 }
-                IconButton(onClick = { track?.let { playlistFor = it } }, enabled = track != null, modifier = Modifier.size(56.dp)) {
-                    Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Add to playlist", tint = Color.White, modifier = Modifier.size(30.dp))
+                IconButton(onClick = { track?.let { playlistFor = it } }, enabled = track != null, modifier = Modifier.size(52.dp)) {
+                    Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Add to playlist", tint = Color.White, modifier = Modifier.size(28.dp))
                 }
-                IconButton(onClick = { searching = true }, modifier = Modifier.size(56.dp)) {
-                    Icon(Icons.Filled.Search, contentDescription = "Search", tint = Color.White, modifier = Modifier.size(34.dp))
-                }
-            }
-            Box(Modifier.fillMaxWidth().height(44.dp), contentAlignment = Alignment.CenterStart) {
-                if (track != null) {
-                    RatingBar(track.rating, { value -> scope.launch { container.library.setRating(track.path, value) } }, starSize = 28.dp)
+                IconButton(onClick = { searching = true }, modifier = Modifier.size(52.dp)) {
+                    Icon(Icons.Filled.Search, contentDescription = "Search", tint = Color.White, modifier = Modifier.size(32.dp))
                 }
             }
 
-            // Previous / next: the biggest targets.
-            Row(Modifier.fillMaxWidth().weight(1.2f).padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            // Previous / next: the biggest targets, right at the top.
+            Row(Modifier.fillMaxWidth().weight(1f).padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 BigButton(Icons.Filled.SkipPrevious, "Previous", Modifier.weight(1f).fillMaxHeight(), onClick = player::previous)
                 BigButton(Icons.Filled.SkipNext, "Next", Modifier.weight(1f).fillMaxHeight(), onClick = player::next)
             }
@@ -167,7 +157,7 @@ fun LockScreenPlayer(
             Progress(player, state.isPlaying, state.currentPath, state.durationMs)
 
             // Up next.
-            QueueList(player, state, Modifier.weight(1f).fillMaxWidth())
+            QueueList(player, state, Modifier.weight(1.5f).fillMaxWidth())
 
             // Play/pause bar with small toggles.
             Row(
