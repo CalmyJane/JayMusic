@@ -89,7 +89,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
+import androidx.compose.ui.res.painterResource
 import com.calmyjane.jaymusic.AppContainer
+import com.calmyjane.jaymusic.R
 import com.calmyjane.jaymusic.data.PlaylistSummary
 import com.calmyjane.jaymusic.data.TrackEntity
 import com.calmyjane.jaymusic.playback.PlayerConnection
@@ -149,6 +151,12 @@ fun LockScreenPlayer(
         ) {
             // Slim top row: rating, add to playlist, search. The title is shown in the queue below.
             Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    painterResource(R.drawable.ic_logo),
+                    contentDescription = "JayMusic",
+                    tint = Color.White,
+                    modifier = Modifier.padding(start = 4.dp, end = 12.dp).size(26.dp),
+                )
                 Box(Modifier.weight(1f)) {
                     if (track != null) {
                         RatingBar(track.rating, { value -> scope.launch { container.library.setRating(track.path, value) } }, starSize = 26.dp)
@@ -349,7 +357,7 @@ private fun QueueList(
         Row(Modifier.fillMaxWidth().height(28.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = null, tint = Gray, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
-            Text("UP NEXT  ·  hold to move", style = MaterialTheme.typography.labelSmall, color = Gray)
+            Text("UP NEXT", style = MaterialTheme.typography.labelSmall, color = Gray)
         }
         LazyColumn(
             state = listState,

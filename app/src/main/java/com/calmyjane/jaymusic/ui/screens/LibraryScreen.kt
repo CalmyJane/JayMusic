@@ -66,6 +66,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.res.painterResource
+import com.calmyjane.jaymusic.R
 import com.calmyjane.jaymusic.data.TrackEntity
 import com.calmyjane.jaymusic.ui.MainViewModel
 import com.calmyjane.jaymusic.ui.SongSort
@@ -101,17 +103,28 @@ fun LibraryScreen(vm: MainViewModel, contentPadding: PaddingValues) {
                     }
                 }
             } else {
-                ViewToggle(Icons.Filled.MusicNote, "Songs", mode == 0) { mode = 0 }
-                ViewToggle(Icons.Filled.Folder, "Folders", mode == 1) { mode = 1 }
-                Spacer(Modifier.weight(1f))
-                SortMenu(
-                    current = filter.sort,
-                    downloadedOnly = filter.downloadedOnly,
-                    onSelect = { vm.songFilter.value = filter.copy(sort = it) },
-                    onToggleDownloadedOnly = { vm.songFilter.value = filter.copy(downloadedOnly = !filter.downloadedOnly) },
-                )
-                IconButton(onClick = { searching = true; mode = 0 }) {
-                    Icon(Icons.Filled.Search, contentDescription = "Search")
+                // Logo left, songs/folders centered, sort and search right.
+                Box(Modifier.fillMaxSize()) {
+                    Icon(
+                        painterResource(R.drawable.ic_logo),
+                        contentDescription = "JayMusic",
+                        modifier = Modifier.align(Alignment.CenterStart).padding(start = 12.dp).size(26.dp),
+                    )
+                    Row(Modifier.align(Alignment.Center), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ViewToggle(Icons.Filled.MusicNote, "Songs", mode == 0) { mode = 0 }
+                        ViewToggle(Icons.Filled.Folder, "Folders", mode == 1) { mode = 1 }
+                    }
+                    Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
+                        SortMenu(
+                            current = filter.sort,
+                            downloadedOnly = filter.downloadedOnly,
+                            onSelect = { vm.songFilter.value = filter.copy(sort = it) },
+                            onToggleDownloadedOnly = { vm.songFilter.value = filter.copy(downloadedOnly = !filter.downloadedOnly) },
+                        )
+                        IconButton(onClick = { searching = true; mode = 0 }) {
+                            Icon(Icons.Filled.Search, contentDescription = "Search")
+                        }
+                    }
                 }
             }
         }

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  JayMusic logo used in the app and on the lock screen. To use your own logo, replace this file
+  (or add app/src/main/res/drawable/ic_logo.png / .webp and delete this one).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="28dp"
+    android:height="28dp"
+    android:viewportWidth="52"
+    android:viewportHeight="52">
+    <group
+        android:translateX="-31"
+        android:translateY="-29">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M58,30 L58,62.2 C56.2,61.4 54.2,61 52,61 C45.4,61 40,65 40,70 C40,75 45.4,79 52,79 C58.6,79 64,75 64,70 L64,42 L74,42 L74,30 Z" />
+    </group>
+</vector>
