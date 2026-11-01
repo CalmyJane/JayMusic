@@ -72,6 +72,7 @@ class PlaybackService : MediaSessionService() {
     private var currentPath: String? = null
     private val taggedPaths = HashSet<String>()
     private var consecutiveErrors = 0
+    private var lastPlaybackState = Player.STATE_IDLE
 
     override fun onCreate() {
         super.onCreate()
@@ -437,6 +438,16 @@ class PlaybackService : MediaSessionService() {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             stallJob?.cancel()
+            // Stopped without an error = the user swiped the notification away (Media3 sends
+            // "stop" for that). Shut the service down so the notification does not come back;
+            // the queue is saved and restored the next time the app is opened.
+            if (playbackState == Player.STATE_IDLE && lastPlaybackState != Player.STATE_IDLE && player.playerError == null) {
+                lastPlaybackState = playbackState
+                saveQueueNow()
+                stopSelf()
+                return
+            }
+            lastPlaybackState = playbackState
             when (playbackState) {
                 Player.STATE_BUFFERING -> if (player.playWhenReady) startStallWatchdog()
                 Player.STATE_READY -> {

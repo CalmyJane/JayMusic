@@ -53,6 +53,8 @@ All notable changes are documented here. The format follows
 - Settings redesigned as a clean list of equally sized rows; server account on its own page.
 
 ### Fixed
+- Swiping the paused player notification away removes it for good (it came back once before):
+  the playback service now shuts down when stopped; the queue is restored on next start.
 - Shuffle/repeat on the lock screen player have a larger touch area, so a slightly-off tap no
   longer counts as "tap empty area" and closes the player. Reordering the queue for shuffle can
   no longer crash the app.
