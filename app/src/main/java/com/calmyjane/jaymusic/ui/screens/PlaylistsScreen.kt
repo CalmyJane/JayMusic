@@ -127,6 +127,13 @@ fun PlaylistDetailScreen(vm: MainViewModel, playlistId: Long, contentPadding: Pa
                     isExcluded = rules.isExcluded(entry.track.path),
                     onClick = { vm.play(tracks, index) },
                     onMore = { menuFor = entry },
+                    onToggleDownload = rules.excludedBy(entry.track.path).let { by ->
+                        if (by == null || by == entry.track.path) {
+                            { vm.setFolderExcluded(entry.track.path, by == null); Unit }
+                        } else {
+                            null
+                        }
+                    },
                 )
             }
         }

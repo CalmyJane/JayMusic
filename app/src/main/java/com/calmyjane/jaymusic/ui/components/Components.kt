@@ -22,6 +22,8 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.MoreVert
@@ -89,7 +91,8 @@ fun TrackRow(
     isExcluded: Boolean,
     onClick: () -> Unit,
     onMore: () -> Unit,
-    trailing: @Composable (() -> Unit)? = null,
+    /** Toggles "never download"; null if inherited from a folder (then it is shown, not tappable). */
+    onToggleDownload: (() -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
@@ -112,18 +115,8 @@ fun TrackRow(
                 overflow = TextOverflow.Ellipsis,
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (isDownloaded) {
-                    Icon(
-                        Icons.Filled.DownloadDone,
-                        contentDescription = "On phone",
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.width(4.dp))
-                }
                 Text(
-                    text = listOfNotNull(track.artist, track.album, if (isExcluded) "not downloaded" else null)
-                        .joinToString(" · "),
+                    text = listOfNotNull(track.artist, track.album).joinToString(" · "),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -134,10 +127,33 @@ fun TrackRow(
                 SmallRating(track.rating)
             }
         }
-        trailing?.invoke()
-        IconButton(onClick = onMore) {
-            Icon(Icons.Filled.MoreVert, contentDescription = "More")
-        }
+        DownloadToggle(
+            excluded = isExcluded,
+            onPhone = isDownloaded,
+            enabled = onToggleDownload != null,
+            onToggle = { onToggleDownload?.invoke() },
+        )
+    }
+}
+
+/**
+ * Cloud on the right of songs and folders: crossed out = never downloaded, with check = on the
+ * phone, outline = may be downloaded. Tap to switch "never download".
+ */
+@Composable
+fun DownloadToggle(excluded: Boolean, onPhone: Boolean, enabled: Boolean = true, onToggle: () -> Unit) {
+    val (icon, description) = when {
+        excluded -> Icons.Filled.CloudOff to "Never downloaded – tap to allow"
+        onPhone -> Icons.Filled.CloudDone to "On this phone – tap to never download"
+        else -> Icons.Outlined.Cloud to "Not on this phone – tap to never download"
+    }
+    IconButton(onClick = onToggle, enabled = enabled) {
+        Icon(
+            icon,
+            contentDescription = description,
+            tint = if (excluded || onPhone) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.outline,
+            modifier = Modifier.size(22.dp),
+        )
     }
 }
 

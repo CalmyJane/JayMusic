@@ -7,7 +7,10 @@ All notable changes are documented here. The format follows
 ## [Unreleased]
 
 ### Added
-- Folder menu (long-press or ⋮ in the folder view): play, shuffle play, play next, add to queue,
+- Cloud toggle on every song and folder: crossed out = never downloaded, with check = on the
+  phone, outline = may be downloaded; tap to switch. The ⋮ buttons are gone (long-press opens
+  the menu).
+- Folder menu (long-press in the folder view): play, shuffle play, play next, add to queue,
   add all to playlist (or a new playlist named after the folder), download to phone now, never
   download / allow download. Songs get "download to phone now" as well.
 - Error report in Settings (last crash or handled error, with copy button) for bug reports.

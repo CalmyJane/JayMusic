@@ -71,6 +71,7 @@ import com.calmyjane.jaymusic.R
 import com.calmyjane.jaymusic.data.TrackEntity
 import com.calmyjane.jaymusic.ui.MainViewModel
 import com.calmyjane.jaymusic.ui.SongSort
+import com.calmyjane.jaymusic.ui.components.DownloadToggle
 import com.calmyjane.jaymusic.ui.components.FolderActions
 import com.calmyjane.jaymusic.ui.components.FolderActionsSheet
 import com.calmyjane.jaymusic.ui.components.SheetAction
@@ -267,13 +268,19 @@ fun TrackList(
     LazyColumn(modifier.fillMaxSize()) {
         if (header != null) item { header() }
         itemsIndexed(tracks, key = { _, t -> t.path }) { index, track ->
+            val excludedBy = rules.excludedBy(track.path)
             TrackRow(
                 track = track,
                 isCurrent = track.path == playerState.currentPath,
                 isDownloaded = cache[track.path]?.complete == true,
-                isExcluded = rules.isExcluded(track.path),
+                isExcluded = excludedBy != null,
                 onClick = { vm.play(tracks, index) },
                 onMore = { menuFor = track },
+                onToggleDownload = if (excludedBy == null || excludedBy == track.path) {
+                    { vm.setFolderExcluded(track.path, excludedBy == null); Unit }
+                } else {
+                    null
+                },
             )
         }
     }
@@ -371,17 +378,13 @@ private fun FolderBrowser(vm: MainViewModel) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        if (excludedBy != null) {
-                            Icon(
-                                Icons.Filled.CloudOff,
-                                contentDescription = "Never downloaded",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-                        IconButton(onClick = { folderMenu = node }) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = "Folder options")
-                        }
+                        DownloadToggle(
+                            excluded = excludedBy != null,
+                            onPhone = false,
+                            // Inherited from a parent folder: change it there.
+                            enabled = excludedBy == null || excludedBy == node.path,
+                            onToggle = { vm.setFolderExcluded(node.path, excludedBy == null) },
+                        )
                     }
                 }
                 }
@@ -413,9 +416,9 @@ private fun FolderMenu(vm: MainViewModel, node: FolderNode, onDismiss: () -> Uni
             onAddToQueue = { vm.addAllToQueue(tracks, node.name) },
             onAddToPlaylist = { vm.addAllToPlaylist(it, tracks) },
             onCreatePlaylist = { vm.createPlaylistWith(it, tracks) },
-            onDownloadNow = if (excludedBy == null) ({ vm.downloadNow(tracks, node.name) }) else null,
+            onDownloadNow = if (excludedBy == null) ({ vm.downloadNow(tracks, node.name); Unit }) else null,
             onToggleExcluded = if (excludedBy == null || excludedBy == node.path) {
-                { vm.setFolderExcluded(node.path, excludedBy == null) }
+                { vm.setFolderExcluded(node.path, excludedBy == null); Unit }
             } else {
                 null
             },
