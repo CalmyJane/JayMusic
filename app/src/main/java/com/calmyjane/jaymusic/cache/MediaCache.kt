@@ -191,6 +191,22 @@ class MediaCache(
         return plan.fits
     }
 
+    /**
+     * Downloads [paths] now (e.g. a folder the user wants on the phone), making room by deleting
+     * worse rated songs. Returns how many are on the phone afterwards.
+     */
+    suspend fun downloadAll(paths: List<String>, sizes: Map<String, Long>): Int {
+        var done = 0
+        for (path in paths) {
+            if (!connection.isOnline) break
+            if (isComplete(path)) { done++; continue }
+            val size = sizes[path] ?: continue
+            if (!withContext(Dispatchers.IO) { makeRoomFor(path, size) }) break
+            if (download(path)) done++
+        }
+        return done
+    }
+
     /** Deletes the worst rated songs until the cache fits into the budget again. */
     fun enforceBudget() {
         StoragePolicy.shrinkTo(cachedSongs(), budgetBytes(), protectedIds()).forEach(::delete)

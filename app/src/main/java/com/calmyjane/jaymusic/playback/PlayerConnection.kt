@@ -164,6 +164,23 @@ class PlayerConnection(
         }
     }
 
+    /** Plays [tracks] after the current song, in this order. */
+    fun playNextAll(tracks: List<TrackEntity>) = withController { c ->
+        if (tracks.isEmpty()) return@withController
+        if (c.mediaItemCount == 0) {
+            play(tracks)
+            return@withController
+        }
+        c.addMediaItems(c.currentMediaItemIndex + 1, tracks.map(MediaItems::from))
+        c.sendCustomCommand(SessionCommand(PlaybackService.CMD_MAKE_NEXT, Bundle.EMPTY), Bundle.EMPTY)
+    }
+
+    /** Appends [tracks] to the end of the queue. */
+    fun addAllToQueue(tracks: List<TrackEntity>) = withController { c ->
+        if (tracks.isEmpty()) return@withController
+        if (c.mediaItemCount == 0) play(tracks) else c.addMediaItems(tracks.map(MediaItems::from))
+    }
+
     /** Plays [track] now: jumps to it if it is in the queue, otherwise inserts it and jumps. */
     fun playNow(track: TrackEntity) = withController { c ->
         if (c.mediaItemCount == 0) {

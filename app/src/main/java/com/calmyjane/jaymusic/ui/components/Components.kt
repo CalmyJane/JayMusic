@@ -17,6 +17,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.MoreVert
@@ -247,4 +252,91 @@ fun formatBytes(bytes: Long): String = when {
     bytes >= 1L shl 30 -> "%.1f GB".format(bytes / (1L shl 30).toDouble())
     bytes >= 1L shl 20 -> "%.0f MB".format(bytes / (1L shl 20).toDouble())
     else -> "%.0f KB".format(bytes / 1024.0)
+}
+
+/** What a folder menu can do; null hides the entry. */
+class FolderActions(
+    val onPlay: () -> Unit,
+    val onShuffle: () -> Unit,
+    val onPlayNext: () -> Unit,
+    val onAddToQueue: () -> Unit,
+    val onAddToPlaylist: (PlaylistSummary) -> Unit,
+    val onCreatePlaylist: (String) -> Unit,
+    val onDownloadNow: (() -> Unit)?,
+    /** Switches "never download"; null when inherited from a parent folder. */
+    val onToggleExcluded: (() -> Unit)?,
+)
+
+/** Menu of a folder (long-press or ⋮): play, queue, playlist, download, exclude. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FolderActionsSheet(
+    name: String,
+    songCount: Int,
+    excluded: Boolean,
+    excludedByParent: String?,
+    playlists: List<PlaylistSummary>,
+    actions: FolderActions,
+    onDismiss: () -> Unit,
+) {
+    var choosingPlaylist by remember { mutableStateOf(false) }
+    var creating by remember { mutableStateOf(false) }
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+            Text(name, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(
+                "$songCount songs" + if (excluded) " · never downloaded" else "",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            HorizontalDivider(Modifier.padding(top = 8.dp))
+            if (!choosingPlaylist) {
+                SheetAction(Icons.Filled.PlayArrow, "Play") { actions.onPlay(); onDismiss() }
+                SheetAction(Icons.Filled.Shuffle, "Shuffle play") { actions.onShuffle(); onDismiss() }
+                SheetAction(Icons.Filled.SkipNext, "Play next") { actions.onPlayNext(); onDismiss() }
+                SheetAction(Icons.AutoMirrored.Filled.QueueMusic, "Add to queue") { actions.onAddToQueue(); onDismiss() }
+                SheetAction(Icons.AutoMirrored.Filled.PlaylistAdd, "Add all to playlist…") { choosingPlaylist = true }
+                actions.onDownloadNow?.let { download ->
+                    SheetAction(Icons.Filled.Download, "Download to phone now") { download(); onDismiss() }
+                }
+                when {
+                    actions.onToggleExcluded == null && excludedByParent != null ->
+                        Text(
+                            "Never downloaded because of folder “${excludedByParent.substringAfterLast('/')}”",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 12.dp),
+                        )
+                    excluded -> SheetAction(Icons.Filled.CloudDownload, "Allow download") { actions.onToggleExcluded?.invoke(); onDismiss() }
+                    else -> SheetAction(Icons.Filled.CloudOff, "Never download (deletes from phone)") {
+                        actions.onToggleExcluded?.invoke()
+                        onDismiss()
+                    }
+                }
+            } else {
+                SheetAction(Icons.Filled.Add, "New playlist…") { creating = true }
+                LazyColumn(Modifier.heightIn(max = 360.dp)) {
+                    items(playlists, key = { it.playlist.id }) { p ->
+                        SheetAction(Icons.AutoMirrored.Filled.QueueMusic, "${p.playlist.name} (${p.trackCount})") {
+                            actions.onAddToPlaylist(p)
+                            onDismiss()
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (creating) {
+        NameDialog(
+            title = "New playlist",
+            initial = name,
+            confirm = "Create",
+            onDismiss = { creating = false },
+            onConfirm = { playlistName ->
+                actions.onCreatePlaylist(playlistName)
+                creating = false
+                onDismiss()
+            },
+        )
+    }
 }

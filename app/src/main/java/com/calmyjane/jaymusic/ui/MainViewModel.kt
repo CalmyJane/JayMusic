@@ -164,6 +164,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setFolderExcluded(path: String, excluded: Boolean) = viewModelScope.launch {
         library.setFolderExcluded(path, excluded)
+        val name = path.substringAfterLast('/')
+        _messages.tryEmit(if (excluded) "$name: never downloaded, removed from phone" else "$name: downloads allowed again")
     }
 
     // Playback
@@ -192,6 +194,49 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             is PlayResult.StartedOffline ->
                 _messages.tryEmit("Offline: playing downloaded songs only (${result.skipped} not on phone)")
             PlayResult.NothingAvailable -> _messages.tryEmit("Offline and none of these songs are downloaded")
+        }
+    }
+
+    // Whole folders (including sub folders) and lists of songs
+
+    /** All songs in [folder] and its sub folders, in path order. */
+    fun tracksIn(folder: String): List<TrackEntity> {
+        val prefix = folder.trimEnd('/') + "/"
+        return allTracks.value.filter { it.path.startsWith(prefix) }.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.path })
+    }
+
+    fun playNextAll(tracks: List<TrackEntity>, label: String) {
+        player.playNextAll(tracks)
+        _messages.tryEmit("Plays next: $label")
+    }
+
+    fun addAllToQueue(tracks: List<TrackEntity>, label: String) {
+        player.addAllToQueue(tracks)
+        _messages.tryEmit("Added to queue: $label")
+    }
+
+    fun addAllToPlaylist(playlist: PlaylistSummary, tracks: List<TrackEntity>) = viewModelScope.launch {
+        library.addToPlaylist(playlist.playlist.id, tracks.map { it.path })
+        _messages.tryEmit("${tracks.size} songs added to ${playlist.playlist.name}")
+    }
+
+    fun createPlaylistWith(name: String, tracks: List<TrackEntity>) = viewModelScope.launch {
+        val id = library.createPlaylist(name)
+        library.addToPlaylist(id, tracks.map { it.path })
+        _messages.tryEmit("Playlist $name created with ${tracks.size} songs")
+    }
+
+    /** Downloads the songs now, as far as the storage limit allows (worse rated songs make room). */
+    fun downloadNow(tracks: List<TrackEntity>, label: String) {
+        if (!container.connection.isOnline) {
+            _messages.tryEmit("Offline – cannot download now")
+            return
+        }
+        val allowed = tracks.filter { !folderRules.value.isExcluded(it.path) }
+        _messages.tryEmit("Downloading $label…")
+        container.scope.launch {
+            val done = container.mediaCache.downloadAll(allowed.map { it.path }, allowed.associate { it.path to it.sizeBytes })
+            _messages.tryEmit("$label: $done of ${allowed.size} songs on the phone")
         }
     }
 

@@ -71,7 +71,13 @@ import com.calmyjane.jaymusic.R
 import com.calmyjane.jaymusic.data.TrackEntity
 import com.calmyjane.jaymusic.ui.MainViewModel
 import com.calmyjane.jaymusic.ui.SongSort
+import com.calmyjane.jaymusic.ui.components.FolderActions
+import com.calmyjane.jaymusic.ui.components.FolderActionsSheet
 import com.calmyjane.jaymusic.ui.components.SheetAction
+import com.calmyjane.jaymusic.ui.FolderNode
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Download
 import com.calmyjane.jaymusic.ui.components.TrackActionsSheet
 import com.calmyjane.jaymusic.ui.components.TrackRow
 
@@ -294,6 +300,12 @@ fun TrackMenu(vm: MainViewModel, track: TrackEntity, extraActions: @Composable (
         onCreatePlaylist = { vm.createPlaylist(it, track.path) },
         extraActions = {
             extraActions()
+            if (excludedBy == null) {
+                SheetAction(Icons.Filled.Download, "Download to phone now") {
+                    vm.downloadNow(listOf(track), track.title)
+                    onDismiss()
+                }
+            }
             when {
                 excludedBy == null -> SheetAction(Icons.Filled.CloudOff, "Never download") {
                     vm.setFolderExcluded(track.path, true)
@@ -310,11 +322,15 @@ fun TrackMenu(vm: MainViewModel, track: TrackEntity, extraActions: @Composable (
     )
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun FolderBrowser(vm: MainViewModel) {
     var folder by rememberSaveable { mutableStateOf<String?>(null) }
     val content by remember(folder) { vm.folderContent(folder) }.collectAsStateWithLifecycle(initialValue = null)
     val rules by vm.folderRules.collectAsStateWithLifecycle()
+    var folderMenu by remember { mutableStateOf<FolderNode?>(null) }
+
+    folderMenu?.let { node -> FolderMenu(vm, node) { folderMenu = null } }
 
     Column {
         if (folder != null) {
@@ -340,7 +356,8 @@ private fun FolderBrowser(vm: MainViewModel) {
                 for (node in folders) {
                     val excludedBy = rules.excludedBy(node.path)
                     Row(
-                        Modifier.fillMaxWidth().height(54.dp).clickable { folder = node.path }
+                        Modifier.fillMaxWidth().height(54.dp)
+                            .combinedClickable(onClick = { folder = node.path }, onLongClick = { folderMenu = node })
                             .padding(start = 16.dp, end = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -349,37 +366,62 @@ private fun FolderBrowser(vm: MainViewModel) {
                         Column(Modifier.weight(1f)) {
                             Text(node.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(
-                                "${node.songCount} songs" + if (excludedBy != null) " · never downloaded" else "",
+                                "${node.songCount} songs",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        DownloadToggle(
-                            excluded = excludedBy != null,
-                            // Inherited from a parent folder: change it there.
-                            enabled = excludedBy == null || excludedBy == node.path,
-                            onToggle = { vm.setFolderExcluded(node.path, excludedBy == null) },
-                        )
+                        if (excludedBy != null) {
+                            Icon(
+                                Icons.Filled.CloudOff,
+                                contentDescription = "Never downloaded",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                        IconButton(onClick = { folderMenu = node }) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = "Folder options")
+                        }
                     }
+                }
                 }
             }
         })
     }
 }
 
-/**
- * Cloud icon showing whether songs may be stored on the phone. Tap to switch: a crossed-out cloud
- * means "never download" (existing copies are deleted, streaming still works).
- */
+/** Long-press / ⋮ menu of a folder; all actions apply to the songs in it and its sub folders. */
 @Composable
-fun DownloadToggle(excluded: Boolean, enabled: Boolean = true, onToggle: () -> Unit) {
-    IconButton(onClick = onToggle, enabled = enabled) {
-        Icon(
-            if (excluded) Icons.Filled.CloudOff else Icons.Outlined.CloudDownload,
-            contentDescription = if (excluded) "Never downloaded – tap to allow" else "Downloads allowed – tap to never download",
-            tint = if (excluded) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.outline,
-        )
-    }
+private fun FolderMenu(vm: MainViewModel, node: FolderNode, onDismiss: () -> Unit) {
+    val playlists by vm.playlists.collectAsState()
+    val rules by vm.folderRules.collectAsState()
+    val excludedBy = rules.excludedBy(node.path)
+    val tracks = remember(node.path) { vm.tracksIn(node.path) }
+    FolderActionsSheet(
+        name = node.name,
+        songCount = tracks.size,
+        excluded = excludedBy != null,
+        excludedByParent = excludedBy?.takeIf { it != node.path },
+        playlists = playlists,
+        actions = FolderActions(
+            onPlay = { vm.play(tracks, 0) },
+            onShuffle = {
+                if (!vm.player.state.value.shuffle) vm.toggleShuffle()
+                vm.play(tracks, -1)
+            },
+            onPlayNext = { vm.playNextAll(tracks, node.name) },
+            onAddToQueue = { vm.addAllToQueue(tracks, node.name) },
+            onAddToPlaylist = { vm.addAllToPlaylist(it, tracks) },
+            onCreatePlaylist = { vm.createPlaylistWith(it, tracks) },
+            onDownloadNow = if (excludedBy == null) ({ vm.downloadNow(tracks, node.name) }) else null,
+            onToggleExcluded = if (excludedBy == null || excludedBy == node.path) {
+                { vm.setFolderExcluded(node.path, excludedBy == null) }
+            } else {
+                null
+            },
+        ),
+        onDismiss = onDismiss,
+    )
 }
 
 @Composable
