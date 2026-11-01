@@ -1,11 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A white eighth note on black. -->
+<!-- CalmyJane logo, white, centered in the adaptive icon's 66 dp safe zone. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M58,30 L58,62.2 C56.2,61.4 54.2,61 52,61 C45.4,61 40,65 40,70 C40,75 45.4,79 52,79 C58.6,79 64,75 64,70 L64,42 L74,42 L74,30 Z" />
+    <group
+        android:scaleX="0.4"
+        android:scaleY="0.4"
+        android:translateX="24"
+        android:translateY="28.8">
+        <group
+            android:translateX="-28.346172"
+            android:translateY="-67.346711">
+            <path
+                android:fillColor="#FFFFFFFF"
+                android:fillType="evenOdd"
+                android:pathData="m 46.648479,131.26477 -0.003,31.33556 H 159.91391 V 144.77816 H 64.562629 V 131.26477 Z M 126.77385,99.98706 h 18.61959 v 18.63263 h -18.61959 z m -62.580031,0 h 18.61959 v 18.63263 H 64.193819 Z M 28.346749,67.346711 V 193.34677 h 0.0486 149.900931 V 67.346711 Z m 5.49992,5.49992 H 172.79633 V 187.84685 H 33.846669 Z" />
+        </group>
+    </group>
 </vector>

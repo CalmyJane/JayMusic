@@ -1,18 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  JayMusic logo used in the app and on the lock screen. To use your own logo, replace this file
-  (or add app/src/main/res/drawable/ic_logo.png / .webp and delete this one).
--->
+<!-- CalmyJane logo (docs/assets/logo.svg), used in the app bar and on the lock screen player. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="28dp"
-    android:height="28dp"
-    android:viewportWidth="52"
-    android:viewportHeight="52">
+    android:width="30dp"
+    android:height="25.2dp"
+    android:viewportWidth="150.00021"
+    android:viewportHeight="126.00006">
     <group
-        android:translateX="-31"
-        android:translateY="-29">
+        android:translateX="-28.346172"
+        android:translateY="-67.346711">
         <path
             android:fillColor="#FFFFFFFF"
-            android:pathData="M58,30 L58,62.2 C56.2,61.4 54.2,61 52,61 C45.4,61 40,65 40,70 C40,75 45.4,79 52,79 C58.6,79 64,75 64,70 L64,42 L74,42 L74,30 Z" />
+            android:fillType="evenOdd"
+            android:pathData="m 46.648479,131.26477 -0.003,31.33556 H 159.91391 V 144.77816 H 64.562629 V 131.26477 Z M 126.77385,99.98706 h 18.61959 v 18.63263 h -18.61959 z m -62.580031,0 h 18.61959 v 18.63263 H 64.193819 Z M 28.346749,67.346711 V 193.34677 h 0.0486 149.900931 V 67.346711 Z m 5.49992,5.49992 H 172.79633 V 187.84685 H 33.846669 Z" />
     </group>
 </vector>

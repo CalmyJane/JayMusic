@@ -7,6 +7,7 @@ All notable changes are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- CalmyJane logo in the app bar, on the lock screen player, as app icon and status bar icon.
 - "Show" filter in the sort menu: all, on this phone, synced (downloads allowed) or never
   downloaded; applies to the song list and the folder view.
 - Cloud toggle on every song and folder: crossed out = never downloaded, with check = on the
