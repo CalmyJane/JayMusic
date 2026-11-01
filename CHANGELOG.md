@@ -7,6 +7,8 @@ All notable changes are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- "Show" filter in the sort menu: all, on this phone, synced (downloads allowed) or never
+  downloaded; applies to the song list and the folder view.
 - Cloud toggle on every song and folder: crossed out = never downloaded, with check = on the
   phone, outline = may be downloaded; tap to switch. The ⋮ buttons are gone (long-press opens
   the menu).

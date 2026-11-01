@@ -39,10 +39,18 @@ enum class SongSort(val label: String) {
     MOST_PLAYED("Most played"),
 }
 
+/** Which songs/folders to show depending on their download ("sync") state. */
+enum class SyncFilter(val label: String) {
+    ALL("All"),
+    ON_PHONE("On this phone"),
+    SYNCED("Synced (downloads allowed)"),
+    NOT_SYNCED("Never downloaded"),
+}
+
 data class SongFilter(
     val query: String = "",
     val sort: SongSort = SongSort.TITLE,
-    val downloadedOnly: Boolean = false,
+    val sync: SyncFilter = SyncFilter.ALL,
 )
 
 /** One row of the folder browser / exclusion list. */
@@ -74,8 +82,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Songs list after search, sort and filter; computed off the main thread. */
     val songs: StateFlow<List<TrackEntity>> =
-        combine(library.allTracks, songFilter, container.mediaCache.entries) { tracks, filter, cache ->
-            filterSongs(tracks, filter, cache)
+        combine(library.allTracks, songFilter, container.mediaCache.entries, library.folderRules) { tracks, filter, cache, rules ->
+            filterSongs(tracks, filter, cache, rules)
         }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Total size of the songs on the phone. */
@@ -91,10 +99,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         player.release()
     }
 
-    private fun filterSongs(tracks: List<TrackEntity>, filter: SongFilter, cache: Map<String, CacheInfo>): List<TrackEntity> {
+    /** Whether [track] matches the download-state filter. */
+    fun matchesSync(track: TrackEntity, sync: SyncFilter, cache: Map<String, CacheInfo>, rules: FolderRules): Boolean =
+        when (sync) {
+            SyncFilter.ALL -> true
+            SyncFilter.ON_PHONE -> cache[track.path]?.complete == true
+            SyncFilter.SYNCED -> !rules.isExcluded(track.path)
+            SyncFilter.NOT_SYNCED -> rules.isExcluded(track.path)
+        }
+
+    private fun filterSongs(
+        tracks: List<TrackEntity>,
+        filter: SongFilter,
+        cache: Map<String, CacheInfo>,
+        rules: FolderRules,
+    ): List<TrackEntity> {
         val terms = filter.query.trim().lowercase().split(' ').filter { it.isNotEmpty() }
         val filtered = tracks.filter { t ->
-            (!filter.downloadedOnly || cache[t.path]?.complete == true) &&
+            matchesSync(t, filter.sync, cache, rules) &&
                 terms.all { term ->
                     t.title.lowercase().contains(term) ||
                         t.artist?.lowercase()?.contains(term) == true ||
@@ -114,7 +136,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Direct sub folders and songs of [folder] for the folder browser. */
     fun folderContent(folder: String?): Flow<Pair<List<FolderNode>, List<TrackEntity>>> =
-        library.allTracks.map { tracks -> computeFolderContent(tracks, folder) }.flowOn(Dispatchers.Default)
+        combine(library.allTracks, songFilter, container.mediaCache.entries, library.folderRules) { tracks, filter, cache, rules ->
+            // The "show" filter applies to the folder view too: folders without matching songs disappear.
+            val matching = if (filter.sync == SyncFilter.ALL) tracks else tracks.filter { matchesSync(it, filter.sync, cache, rules) }
+            computeFolderContent(matching, folder)
+        }.flowOn(Dispatchers.Default)
 
     private fun computeFolderContent(tracks: List<TrackEntity>, folder: String?): Pair<List<FolderNode>, List<TrackEntity>> {
         val roots = settings.value.musicFolders.map(FolderRules::normalize)

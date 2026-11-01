@@ -71,6 +71,8 @@ import com.calmyjane.jaymusic.R
 import com.calmyjane.jaymusic.data.TrackEntity
 import com.calmyjane.jaymusic.ui.MainViewModel
 import com.calmyjane.jaymusic.ui.SongSort
+import com.calmyjane.jaymusic.ui.SyncFilter
+import androidx.compose.foundation.background
 import com.calmyjane.jaymusic.ui.components.DownloadToggle
 import com.calmyjane.jaymusic.ui.components.FolderActions
 import com.calmyjane.jaymusic.ui.components.FolderActionsSheet
@@ -124,9 +126,9 @@ fun LibraryScreen(vm: MainViewModel, contentPadding: PaddingValues) {
                     Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
                         SortMenu(
                             current = filter.sort,
-                            downloadedOnly = filter.downloadedOnly,
+                            sync = filter.sync,
                             onSelect = { vm.songFilter.value = filter.copy(sort = it) },
-                            onToggleDownloadedOnly = { vm.songFilter.value = filter.copy(downloadedOnly = !filter.downloadedOnly) },
+                            onSelectSync = { vm.songFilter.value = filter.copy(sync = it) },
                         )
                         IconButton(onClick = { searching = true; mode = 0 }) {
                             Icon(Icons.Filled.Search, contentDescription = "Search")
@@ -163,27 +165,47 @@ private fun ViewToggle(icon: ImageVector, description: String, selected: Boolean
     }
 }
 
-/** Sort order plus the "only songs on this phone" filter. */
+/** Sort order plus the download-state filter (songs and folders). */
 @Composable
 private fun SortMenu(
     current: SongSort,
-    downloadedOnly: Boolean,
+    sync: SyncFilter,
     onSelect: (SongSort) -> Unit,
-    onToggleDownloadedOnly: () -> Unit,
+    onSelectSync: (SyncFilter) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }) {
             Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort and filter")
         }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(
-                text = { Text("Only on this phone") },
-                onClick = { onToggleDownloadedOnly(); open = false },
-                leadingIcon = { Icon(Icons.Filled.DownloadDone, contentDescription = null) },
-                trailingIcon = { if (downloadedOnly) Icon(Icons.Filled.Check, contentDescription = "On") },
+        // A dot shows that a filter is active.
+        if (sync != SyncFilter.ALL) {
+            Box(
+                Modifier.align(Alignment.TopEnd).padding(8.dp).size(8.dp)
+                    .background(MaterialTheme.colorScheme.onBackground, androidx.compose.foundation.shape.CircleShape),
             )
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            Text(
+                "SHOW",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+            )
+            SyncFilter.entries.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.label) },
+                    onClick = { onSelectSync(option); open = false },
+                    trailingIcon = { if (option == sync) Icon(Icons.Filled.Check, contentDescription = "Selected") },
+                )
+            }
             HorizontalDivider()
+            Text(
+                "SORT",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+            )
             SongSort.entries.forEach { sort ->
                 DropdownMenuItem(
                     text = { Text(sort.label) },
@@ -386,7 +408,6 @@ private fun FolderBrowser(vm: MainViewModel) {
                             onToggle = { vm.setFolderExcluded(node.path, excludedBy == null) },
                         )
                     }
-                }
                 }
             }
         })
