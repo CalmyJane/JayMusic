@@ -232,7 +232,15 @@ fun LockScreenPlayer(
     }
 
     menuFor?.let { entry ->
-        QueueEntryMenu(container, entry, scope, player, onAddToPlaylist = { playlistFor = it }, onDismiss = { menuFor = null })
+        QueueEntryMenu(
+            container,
+            entry,
+            scope,
+            player,
+            currentIndex = player.upcoming(0).firstOrNull()?.index,
+            onAddToPlaylist = { playlistFor = it },
+            onDismiss = { menuFor = null },
+        )
     }
     playlistFor?.let { selected ->
         PlaylistPicker(
@@ -364,7 +372,19 @@ private fun QueueList(
         }
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize().pointerInput(entries) {
+            modifier = Modifier.fillMaxSize()
+                // Tap = play. A long press is handled below (menu or drag), never as a tap.
+                .pointerInput(entries) {
+                    detectTapGestures(
+                        onLongPress = { },
+                        onTap = { offset ->
+                            val key = listState.layoutInfo.visibleItemsInfo
+                                .firstOrNull { offset.y.toInt() in it.offset..(it.offset + it.size) }?.key
+                            entries.firstOrNull { keyOf(it) == key }?.let { player.skipToQueueIndex(it.index) }
+                        },
+                    )
+                }
+                .pointerInput(entries) {
                 detectDragGesturesAfterLongPress(
                     onDragStart = { offset ->
                         val item = listState.layoutInfo.visibleItemsInfo.firstOrNull {
@@ -412,7 +432,7 @@ private fun QueueList(
                     .zIndex(if (dragging) 1f else 0f)
                     .graphicsLayer { translationY = if (dragging) dragOffset else 0f }
                 if (entry.isCurrent) {
-                    QueueRow(entry, dragging, rowModifier) { player.skipToQueueIndex(entry.index) }
+                    QueueRow(entry, dragging, rowModifier)
                 } else {
                     // Swipe left to remove the song from the queue.
                     val dismissState = rememberSwipeToDismissBoxState(
@@ -438,7 +458,7 @@ private fun QueueList(
                             }
                         },
                     ) {
-                        QueueRow(entry, dragging, Modifier) { player.skipToQueueIndex(entry.index) }
+                        QueueRow(entry, dragging, Modifier)
                     }
                 }
             }
@@ -448,13 +468,12 @@ private fun QueueList(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun QueueRow(entry: PlayerConnection.QueueEntry, dragging: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun QueueRow(entry: PlayerConnection.QueueEntry, dragging: Boolean, modifier: Modifier) {
     Row(
         modifier
             .fillMaxWidth()
             .height(52.dp)
             .background(if (dragging) Color(0xFF262626) else Color.Black)
-            .clickable(onClick = onClick)
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -493,6 +512,8 @@ private fun QueueEntryMenu(
     entry: PlayerConnection.QueueEntry,
     scope: CoroutineScope,
     player: PlayerConnection,
+    /** Queue index of the playing song, for "play next". */
+    currentIndex: Int?,
     onAddToPlaylist: (TrackEntity) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -505,7 +526,21 @@ private fun QueueEntryMenu(
         title = { Text(entry.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
         text = {
             Column {
+                if (track != null) {
+                    RatingBar(
+                        track.rating,
+                        { value -> scope.launch { container.library.setRating(track.path, value) } },
+                        starSize = 32.dp,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                }
                 MenuRow(Icons.Filled.PlayArrow, "Play now") { player.skipToQueueIndex(entry.index); onDismiss() }
+                if (!entry.isCurrent && currentIndex != null) {
+                    MenuRow(Icons.Filled.SkipNext, "Play next") {
+                        player.moveInQueue(entry.index, currentIndex, after = true)
+                        onDismiss()
+                    }
+                }
                 if (track != null) {
                     MenuRow(Icons.AutoMirrored.Filled.PlaylistAdd, "Add to playlist") { onDismiss(); onAddToPlaylist(track) }
                 }
