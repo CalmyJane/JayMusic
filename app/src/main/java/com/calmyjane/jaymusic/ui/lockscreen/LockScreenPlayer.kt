@@ -152,19 +152,15 @@ fun LockScreenPlayer(
         Column(
             Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 12.dp),
         ) {
-            // Slim top row: rating, add to playlist, search. The title is shown in the queue below.
-            Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
+            // Header: logo, current time, add to playlist, search; rating below.
+            Row(Modifier.fillMaxWidth().height(60.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     painterResource(R.drawable.ic_logo),
                     contentDescription = "JayMusic",
                     tint = Color.White,
-                    modifier = Modifier.padding(start = 4.dp, end = 12.dp).size(26.dp),
+                    modifier = Modifier.padding(start = 4.dp, end = 14.dp).size(26.dp),
                 )
-                Box(Modifier.weight(1f)) {
-                    if (track != null) {
-                        RatingBar(track.rating, { value -> scope.launch { container.library.setRating(track.path, value) } }, starSize = 26.dp)
-                    }
-                }
+                Clock(Modifier.weight(1f))
                 IconButton(onClick = { track?.let { playlistFor = it } }, enabled = track != null, modifier = Modifier.size(52.dp)) {
                     Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Add to playlist", tint = Color.White, modifier = Modifier.size(28.dp))
                 }
@@ -172,17 +168,22 @@ fun LockScreenPlayer(
                     Icon(Icons.Filled.Search, contentDescription = "Search", tint = Color.White, modifier = Modifier.size(32.dp))
                 }
             }
+            Box(Modifier.fillMaxWidth().height(40.dp), contentAlignment = Alignment.CenterStart) {
+                if (track != null) {
+                    RatingBar(track.rating, { value -> scope.launch { container.library.setRating(track.path, value) } }, starSize = 26.dp)
+                }
+            }
 
-            // Previous / next: the biggest targets, right at the top.
+            // Up next.
+            QueueList(player, state, Modifier.weight(1.3f).fillMaxWidth(), onMenu = { menuFor = it })
+
+            Progress(player, state.isPlaying, state.currentPath, state.durationMs)
+
+            // Previous / next: the biggest targets, right above play/pause (thumb reach).
             Row(Modifier.fillMaxWidth().weight(1f).padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 BigButton(Icons.Filled.SkipPrevious, "Previous", Modifier.weight(1f).fillMaxHeight(), onClick = player::previous)
                 BigButton(Icons.Filled.SkipNext, "Next", Modifier.weight(1f).fillMaxHeight(), onClick = player::next)
             }
-
-            Progress(player, state.isPlaying, state.currentPath, state.durationMs)
-
-            // Up next.
-            QueueList(player, state, Modifier.weight(1.5f).fillMaxWidth(), onMenu = { menuFor = it })
 
             // Play/pause bar with small toggles.
             Row(
@@ -262,6 +263,21 @@ fun LockScreenPlayer(
 }
 
 /** Seek bar: drag anywhere to jump in the song, also while paused. */
+/** Current time, updated every few seconds; respects the phone's 12/24 h setting. */
+@Composable
+private fun Clock(modifier: Modifier) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val format = remember { android.text.format.DateFormat.getTimeFormat(context) }
+    var now by remember { mutableStateOf(format.format(java.util.Date())) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = format.format(java.util.Date())
+            delay(5_000)
+        }
+    }
+    Text(now, style = MaterialTheme.typography.headlineMedium, color = Color.White, maxLines = 1, modifier = modifier)
+}
+
 @Composable
 private fun Progress(player: PlayerConnection, isPlaying: Boolean, path: String?, durationMs: Long) {
     var position by remember { mutableLongStateOf(player.positionMs()) }

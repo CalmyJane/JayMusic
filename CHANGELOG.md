@@ -30,6 +30,8 @@ All notable changes are documented here. The format follows
 - Shuffle reorders the queue itself: the upcoming songs stay fixed while skipping (before, they
   could change after every skip). Turning shuffle off restores the original order; turning it on
   again gives a new random order.
+- Lock screen player: always portrait; new order from top to bottom: header with the current
+  time, rating, queue, seek bar, previous/next, play/pause.
 - Lock screen queue: swipe a song to the left to remove it. The long-press menu now has the
   rating and "play next", and a long press no longer also starts the song.
 - Player bar at the bottom: shuffle, previous, play, next and repeat, a seek slider (also while
