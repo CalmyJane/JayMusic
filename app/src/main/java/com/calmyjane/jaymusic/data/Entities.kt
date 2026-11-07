@@ -25,6 +25,10 @@ data class TrackEntity(
     val addedAt: Long,
     /** True once title/artist/album were read from the file's own tags. */
     val tagsFromFile: Boolean = false,
+    /** Rating changed on the phone and not yet sent to Audio Station (DS audio). */
+    @ColumnInfo(defaultValue = "0") val ratingDirty: Boolean = false,
+    /** Audio Station song id, to send rating changes. */
+    val serverSongId: String? = null,
 )
 
 @Entity(tableName = "playlists")

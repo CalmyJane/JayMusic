@@ -7,6 +7,10 @@ All notable changes are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Ratings sync with DS audio (Audio Station): ratings from the NAS are taken over, ratings given
+  in JayMusic are sent to the NAS; the latest change wins. Runs on connect, on library sync and
+  a moment after rating a song (Settings › Ratings with DS audio to sync now). Ratings given in
+  JayMusic before this version are sent on the first sync.
 - CalmyJane logo in the app bar, on the lock screen player, as app icon and status bar icon.
 - "Show" filter in the sort menu: all, on this phone, synced (downloads allowed) or never
   downloaded; applies to the song list and the folder view.

@@ -1,5 +1,6 @@
 package com.calmyjane.jaymusic.core.synology
 
+import com.calmyjane.jaymusic.core.synology.SynologyException.Companion.API_AUDIO_SONG
 import com.calmyjane.jaymusic.core.synology.SynologyException.Companion.API_AUTH
 import com.calmyjane.jaymusic.core.synology.SynologyException.Companion.API_DOWNLOAD
 import com.calmyjane.jaymusic.core.synology.SynologyException.Companion.API_INFO
@@ -52,6 +53,8 @@ class SynologyClient(private val http: OkHttpClient) {
         deviceName: String,
         otpCode: String? = null,
         deviceId: String? = null,
+        /** "FileStation" for files; "AudioStation" for a session used with the Audio Station API. */
+        sessionName: String = "FileStation",
     ): Session {
         val base = normalizeBaseUrl(baseUrl)
             ?: throw IllegalArgumentException("Invalid server address: $baseUrl")
@@ -67,7 +70,7 @@ class SynologyClient(private val http: OkHttpClient) {
             .add("method", "login")
             .add("account", account)
             .add("passwd", password)
-            .add("session", "FileStation")
+            .add("session", sessionName)
             .add("format", "sid")
         if (!otpCode.isNullOrBlank()) {
             form.add("otp_code", otpCode.trim())
@@ -145,12 +148,59 @@ class SynologyClient(private val http: OkHttpClient) {
             .build()
     }
 
+    /** Whether Audio Station (DS audio) is installed and usable for this account. */
+    fun hasAudioStation(session: Session): Boolean = session.apis.containsKey(API_AUDIO_SONG)
+
+    /** All songs of Audio Station's library with their rating (shared and personal music). */
+    suspend fun listRatings(session: Session): List<ServerRating> {
+        val api = session.apis[API_AUDIO_SONG] ?: throw SynologyException(CODE_API_MISSING, API_AUDIO_SONG)
+        val result = mutableListOf<ServerRating>()
+        var offset = 0
+        while (true) {
+            val url = session.apiUrl(api.path)
+                .addQueryParameter("api", API_AUDIO_SONG)
+                .addQueryParameter("version", api.pick(3).toString())
+                .addQueryParameter("method", "list")
+                .addQueryParameter("library", "all")
+                .addQueryParameter("additional", "song_rating")
+                .addQueryParameter("offset", offset.toString())
+                .addQueryParameter("limit", RATING_PAGE_SIZE.toString())
+                .addQueryParameter("_sid", session.sid)
+                .build()
+            val data = execute(Request.Builder().url(url).build(), API_AUDIO_SONG).jsonObject
+            val songs = data.array("songs")
+            for (song in songs) {
+                val obj = song as? JsonObject ?: continue
+                val id = obj.string("id") ?: continue
+                val path = obj.string("path") ?: continue
+                val rating = ((obj["additional"] as? JsonObject)?.get("song_rating") as? JsonObject)?.int("rating") ?: 0
+                result += ServerRating(id, path, rating.coerceIn(0, 5))
+            }
+            offset += RATING_PAGE_SIZE
+            if (songs.isEmpty() || offset >= (data.int("total") ?: 0)) return result
+        }
+    }
+
+    /** Sets a song's rating in Audio Station (0 clears it). */
+    suspend fun setRating(session: Session, songId: String, rating: Int) {
+        val api = session.apis[API_AUDIO_SONG] ?: throw SynologyException(CODE_API_MISSING, API_AUDIO_SONG)
+        val url = session.apiUrl(api.path)
+            .addQueryParameter("api", API_AUDIO_SONG)
+            .addQueryParameter("version", api.pick(2).toString())
+            .addQueryParameter("method", "setrating")
+            .addQueryParameter("id", songId)
+            .addQueryParameter("rating", rating.coerceIn(0, 5).toString())
+            .addQueryParameter("_sid", session.sid)
+            .build()
+        execute(Request.Builder().url(url).build(), API_AUDIO_SONG)
+    }
+
     private suspend fun queryApis(base: HttpUrl): Map<String, ApiInfo> {
         val url = base.resolveApi("query.cgi").newBuilder()
             .addQueryParameter("api", API_INFO)
             .addQueryParameter("version", "1")
             .addQueryParameter("method", "query")
-            .addQueryParameter("query", "$API_AUTH,$API_LIST,$API_DOWNLOAD")
+            .addQueryParameter("query", "$API_AUTH,$API_LIST,$API_DOWNLOAD,$API_AUDIO_SONG")
             .build()
         val data = execute(Request.Builder().url(url).build(), API_INFO).jsonObject
         return data.mapNotNull { (name, value) ->
@@ -219,6 +269,7 @@ class SynologyClient(private val http: OkHttpClient) {
 
     companion object {
         private const val PAGE_SIZE = 1000
+        private const val RATING_PAGE_SIZE = 5000
 
         /**
          * Accepts what users type: `nas.local:5000`, `https://example.com:5001/`, … and returns

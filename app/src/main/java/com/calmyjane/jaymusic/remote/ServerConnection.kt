@@ -105,6 +105,33 @@ class ServerConnection(
 
     fun client(): SynologyClient = client
 
+    @Volatile
+    private var audioSession: Session? = null
+
+    /**
+     * A separate session for the Audio Station API (ratings of DS audio), on the same address as
+     * the File Station session. Null if offline or Audio Station is not installed.
+     */
+    suspend fun audioStationSession(): Session? {
+        val files = session ?: return null
+        if (!client.hasAudioStation(files)) return null
+        audioSession?.takeIf { it.baseUrl == files.baseUrl }?.let { return it }
+        val config = settings.flow.first()
+        val password = secrets.password ?: return null
+        return client.login(
+            files.baseUrl.toString(),
+            config.username,
+            password,
+            deviceName = "JayMusic (${Build.MODEL})",
+            deviceId = config.deviceId,
+            sessionName = "AudioStation",
+        ).also { audioSession = it }
+    }
+
+    fun invalidateAudioStation() {
+        audioSession = null
+    }
+
     /** Waits up to [timeoutMs] for a session, e.g. in the background sync worker. */
     suspend fun awaitSession(timeoutMs: Long): Session? {
         session?.let { return it }

@@ -25,7 +25,8 @@ class SynologyClientTest {
         {"success":true,"data":{
           "SYNO.API.Auth":{"path":"entry.cgi","minVersion":1,"maxVersion":7},
           "SYNO.FileStation.List":{"path":"entry.cgi","minVersion":1,"maxVersion":2},
-          "SYNO.FileStation.Download":{"path":"entry.cgi","minVersion":1,"maxVersion":2}
+          "SYNO.FileStation.Download":{"path":"entry.cgi","minVersion":1,"maxVersion":2},
+          "SYNO.AudioStation.Song":{"path":"AudioStation/song.cgi","minVersion":1,"maxVersion":3}
         }}
     """.trimIndent()
 
@@ -40,6 +41,11 @@ class SynologyClientTest {
                     request.method == "POST" -> loginResponse
                     url.queryParameter("method") == "list_share" ->
                         """{"success":true,"data":{"total":1,"offset":0,"shares":[{"isdir":true,"name":"music","path":"/music"}]}}"""
+                    url.queryParameter("api") == "SYNO.AudioStation.Song" && url.queryParameter("method") == "list" ->
+                        """{"success":true,"data":{"total":2,"offset":0,"songs":[
+                          {"id":"music_1","path":"/volume1/music/a.mp3","title":"A","type":"file","additional":{"song_rating":{"rating":4}}},
+                          {"id":"music_2","path":"/volume1/music/b.mp3","title":"B","type":"file","additional":{"song_rating":{"rating":0}}}]}}"""
+                    url.queryParameter("method") == "setrating" -> """{"success":true}"""
                     url.queryParameter("method") == "list" -> listPage(url.queryParameter("offset")!!.toInt())
                     else -> """{"success":false,"error":{"code":101}}"""
                 }
@@ -129,5 +135,20 @@ class SynologyClientTest {
         assertEquals("http://nas.local:5000/", SynologyClient.normalizeBaseUrl("nas.local:5000")!!.toString())
         assertEquals("https://x.com:5001/", SynologyClient.normalizeBaseUrl(" https://x.com:5001/webman/ ")!!.toString())
         assertNull(SynologyClient.normalizeBaseUrl(""))
+    }
+
+    @Test
+    fun `reads and writes audio station ratings`() = runTest {
+        val session = client.login(baseUrl(), "jay", "secret", deviceName = "phone", sessionName = "AudioStation")
+        assertTrue(client.hasAudioStation(session))
+        val form = requests.last { it.method == "POST" }.body.readUtf8()
+        assertTrue(form, form.contains("session=AudioStation"))
+        val ratings = client.listRatings(session)
+        assertEquals(listOf(ServerRating("music_1", "/volume1/music/a.mp3", 4), ServerRating("music_2", "/volume1/music/b.mp3", 0)), ratings)
+        client.setRating(session, "music_2", 5)
+        val set = requests.last().requestUrl!!
+        assertEquals("/webapi/AudioStation/song.cgi", set.encodedPath)
+        assertEquals("5", set.queryParameter("rating"))
+        assertEquals("music_2", set.queryParameter("id"))
     }
 }

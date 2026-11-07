@@ -17,6 +17,9 @@ data class ApiInfo(val path: String, val minVersion: Int, val maxVersion: Int) {
     fun pick(preferred: Int): Int = preferred.coerceIn(minVersion, maxVersion)
 }
 
+/** A song's rating in Audio Station / DS audio (0 = unrated, 1..5 stars). */
+data class ServerRating(val songId: String, val path: String, val rating: Int)
+
 /** An authenticated File Station session. */
 data class Session(
     val baseUrl: HttpUrl,
@@ -48,6 +51,8 @@ class SynologyException(
         const val API_AUTH = "SYNO.API.Auth"
         const val API_LIST = "SYNO.FileStation.List"
         const val API_DOWNLOAD = "SYNO.FileStation.Download"
+        /** Audio Station (the server side of DS audio); optional, used for ratings. */
+        const val API_AUDIO_SONG = "SYNO.AudioStation.Song"
 
         /** Codes returned by the client itself when the server answer is unusable. */
         const val CODE_BAD_RESPONSE = -1

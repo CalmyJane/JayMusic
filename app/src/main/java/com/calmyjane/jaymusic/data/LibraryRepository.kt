@@ -2,6 +2,8 @@ package com.calmyjane.jaymusic.data
 
 import androidx.room.withTransaction
 import com.calmyjane.jaymusic.core.cache.LibrarySong
+import com.calmyjane.jaymusic.core.ratings.LocalRating
+import com.calmyjane.jaymusic.core.ratings.RatingSyncPlan
 import com.calmyjane.jaymusic.core.library.AudioFiles
 import com.calmyjane.jaymusic.core.library.FolderRules
 import com.calmyjane.jaymusic.core.synology.RemoteEntry
@@ -48,7 +50,25 @@ class LibraryRepository(private val db: AppDatabase, scope: CoroutineScope) {
         LibrarySong(it.path, it.sizeBytes, it.rating, it.playCount, it.lastPlayedAt)
     }
 
-    suspend fun setRating(path: String, rating: Int) = tracks.setRating(path, rating.coerceIn(0, 5))
+    /** Called after a rating was changed on the phone (wired to the rating sync). */
+    var onRatingChanged: (() -> Unit)? = null
+
+    suspend fun setRating(path: String, rating: Int) {
+        tracks.setRating(path, rating.coerceIn(0, 5))
+        onRatingChanged?.invoke()
+    }
+
+    // Rating sync with Audio Station
+
+    suspend fun localRatings(): List<LocalRating> = tracks.all().map { LocalRating(it.path, it.rating, it.ratingDirty) }
+    suspend fun pendingRatings(): List<TrackEntity> = tracks.pendingRatings()
+    suspend fun markRatingSynced(path: String, rating: Int) = tracks.markRatingSynced(path, rating)
+
+    suspend fun applyRatingPlan(plan: RatingSyncPlan) = db.withTransaction {
+        plan.pull.forEach { (path, rating) -> tracks.applyServerRating(path, rating) }
+        plan.alreadyInSync.forEach { tracks.markRatingSynced(it.path, it.rating) }
+        plan.songIds.forEach { (path, id) -> tracks.setServerSongId(path, id) }
+    }
     suspend fun markPlayed(path: String) = tracks.markPlayed(path, System.currentTimeMillis())
     suspend fun setDuration(path: String, durationMs: Long) = tracks.setDuration(path, durationMs)
     suspend fun setTags(path: String, title: String, artist: String?, album: String?) =

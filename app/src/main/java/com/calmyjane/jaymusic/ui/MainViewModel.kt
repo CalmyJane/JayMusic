@@ -308,6 +308,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun reconnect() = container.connection.connect(force = true)
     fun syncNow() = container.sync.syncNow(userInitiated = true)
 
+    /** Last rating sync with DS audio, for Settings. */
+    val ratingSyncStatus: StateFlow<String?> = container.ratingSync.status
+
+    fun syncRatings() = viewModelScope.launch {
+        val result = runCatching { container.ratingSync.syncAll() }
+        _messages.tryEmit(
+            result.fold(
+                onSuccess = { it ?: "DS audio (Audio Station) not available on this server" },
+                onFailure = { "Rating sync failed: ${it.message}" },
+            ),
+        )
+    }
+
     fun setStorageLimitMb(value: Long) = viewModelScope.launch { container.settings.setStorageLimitMb(value) }
     fun setPrefetchCount(value: Int) = viewModelScope.launch { container.settings.setPrefetchCount(value) }
     fun setLockScreenPlayer(value: Boolean) = viewModelScope.launch { container.settings.setLockScreenPlayer(value) }

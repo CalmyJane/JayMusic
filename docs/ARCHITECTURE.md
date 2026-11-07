@@ -109,6 +109,15 @@ Navigation is a small state machine in `MainActivity` (tabs + pages + player ove
 | `SYNO.FileStation.List` | `list`, `list_share` | Library scan (paginated, 1000 entries per page). |
 | `SYNO.FileStation.Download` | `download` | Streaming and downloading (supports HTTP range requests). |
 
+### Ratings (Audio Station)
+
+`SYNO.AudioStation.Song` (`list` with `additional=song_rating`, `setrating`) is used with a
+separate login (`session=AudioStation`). `core/ratings/RatingSync` plans the two-way sync: tracks
+carry a `ratingDirty` flag set when rated on the phone; dirty ratings are pushed, all others take
+the NAS value. Audio Station paths may include the volume (`/volume1/music/...`) and are
+normalised to File Station paths. `sync/RatingSyncer` runs it on connect, during library sync and
+shortly after a rating change.
+
 ### QuickConnect
 
 `core/synology/QuickConnect` resolves a QuickConnect ID with the (undocumented) service used by

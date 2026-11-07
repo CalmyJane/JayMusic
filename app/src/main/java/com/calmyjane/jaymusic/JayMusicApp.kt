@@ -10,6 +10,8 @@ import com.calmyjane.jaymusic.data.SettingsRepository
 import com.calmyjane.jaymusic.playback.QueueStore
 import com.calmyjane.jaymusic.remote.ServerConnection
 import com.calmyjane.jaymusic.sync.LibrarySync
+import com.calmyjane.jaymusic.sync.RatingSyncer
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -47,7 +49,18 @@ class AppContainer(context: Context) {
     val connection = ServerConnection(context, settings, secrets, http, scope)
     val mediaCache = MediaCache(context, http, connection, library, settings, scope)
     val queueStore = QueueStore(context)
+    val ratingSync = RatingSyncer(connection, library, scope)
     val sync = LibrarySync(context, this)
+
+    init {
+        // Ratings: send phone changes right away, and pull DS audio changes whenever we connect.
+        library.onRatingChanged = { ratingSync.pushSoon() }
+        scope.launch {
+            connection.state.collect { state ->
+                if (state is ServerConnection.State.Online) ratingSync.syncIfStale()
+            }
+        }
+    }
 }
 
 val Context.appContainer: AppContainer get() = (applicationContext as JayMusicApp).container

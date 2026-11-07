@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.FolderOff
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.AlertDialog
@@ -131,6 +132,13 @@ fun SettingsScreen(
             title = "Sync now",
             subtitle = syncSummary(syncStatus, settings.lastScanAt),
             onClick = vm::syncNow,
+        )
+        val ratingStatus by vm.ratingSyncStatus.collectAsStateWithLifecycle()
+        SettingRow(
+            icon = Icons.Filled.Star,
+            title = "Ratings with DS audio",
+            subtitle = ratingStatus ?: "Synced when connected · tap to sync now",
+            onClick = vm::syncRatings,
         )
         SettingRow(
             icon = Icons.Filled.Wifi,

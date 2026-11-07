@@ -31,8 +31,23 @@ interface TrackDao {
     @Query("DELETE FROM tracks WHERE path IN (:paths)")
     suspend fun deleteAll(paths: List<String>)
 
-    @Query("UPDATE tracks SET rating = :rating WHERE path = :path")
+    /** A rating given on the phone; sent to Audio Station by the rating sync. */
+    @Query("UPDATE tracks SET rating = :rating, ratingDirty = 1 WHERE path = :path")
     suspend fun setRating(path: String, rating: Int)
+
+    @Query("SELECT * FROM tracks WHERE ratingDirty = 1")
+    suspend fun pendingRatings(): List<TrackEntity>
+
+    /** Takes over a rating from the NAS unless the phone has an unsent change. */
+    @Query("UPDATE tracks SET rating = :rating WHERE path = :path AND ratingDirty = 0")
+    suspend fun applyServerRating(path: String, rating: Int)
+
+    /** Marks a sent rating as synced, unless it was changed again in the meantime. */
+    @Query("UPDATE tracks SET ratingDirty = 0 WHERE path = :path AND rating = :rating")
+    suspend fun markRatingSynced(path: String, rating: Int)
+
+    @Query("UPDATE tracks SET serverSongId = :songId WHERE path = :path")
+    suspend fun setServerSongId(path: String, songId: String)
 
     @Query("UPDATE tracks SET playCount = playCount + 1, lastPlayedAt = :now WHERE path = :path")
     suspend fun markPlayed(path: String, now: Long)

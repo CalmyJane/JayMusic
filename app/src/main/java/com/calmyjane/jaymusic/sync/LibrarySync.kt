@@ -112,6 +112,12 @@ class LibrarySync(private val context: Context, private val container: AppContai
             val cache = container.mediaCache
             val filler = CacheFiller(cache)
             val candidates = filler.candidates(container.library.librarySongs(), container.library.folderRules.value)
+            // Ratings from / to DS audio (only if Audio Station is installed).
+            val ratings = runCatching { container.ratingSync.syncAll() }
+                .onFailure { com.calmyjane.jaymusic.CrashLog.nonFatal("Rating sync failed", it) }
+                .getOrNull()
+            ratings?.let { Log.i(TAG, it) }
+
             _status.value = SyncStatus.Downloading(0)
             val result = filler.fill(
                 candidates,

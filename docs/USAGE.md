@@ -36,8 +36,13 @@ Long-press a song (or tap ⋮) for: rate, play next, add to queue, add to playli
 
 ## Ratings
 
-Tap 1–5 stars; tap the current rating again to clear it. Ratings are stored on the phone and
-decide which songs are kept when storage runs out (see below).
+Tap 1–5 stars; tap the current rating again to clear it. Ratings decide which songs are kept when
+storage runs out (see below).
+
+If Audio Station (DS audio) is installed on the NAS, ratings are synced with it in both
+directions: stars given in DS audio appear in JayMusic and vice versa. The latest change wins.
+Sync happens when JayMusic connects, during library sync and shortly after you rate a song;
+Settings › *Ratings with DS audio* syncs immediately.
 
 ## Playlists
 
