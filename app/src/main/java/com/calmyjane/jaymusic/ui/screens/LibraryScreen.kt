@@ -70,7 +70,7 @@ import androidx.compose.ui.res.painterResource
 import com.calmyjane.jaymusic.R
 import com.calmyjane.jaymusic.data.TrackEntity
 import com.calmyjane.jaymusic.ui.MainViewModel
-import com.calmyjane.jaymusic.ui.SongSort
+import com.calmyjane.jaymusic.data.SongSort
 import com.calmyjane.jaymusic.ui.SyncFilter
 import androidx.compose.foundation.background
 import com.calmyjane.jaymusic.ui.components.DownloadToggle
@@ -127,7 +127,7 @@ fun LibraryScreen(vm: MainViewModel, contentPadding: PaddingValues) {
                         SortMenu(
                             current = filter.sort,
                             sync = filter.sync,
-                            onSelect = { vm.songFilter.value = filter.copy(sort = it) },
+                            onSelect = vm::setSort,
                             onSelectSync = { vm.songFilter.value = filter.copy(sync = it) },
                         )
                         IconButton(onClick = { searching = true; mode = 0 }) {

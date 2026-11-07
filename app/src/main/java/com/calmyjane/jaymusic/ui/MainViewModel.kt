@@ -11,6 +11,7 @@ import com.calmyjane.jaymusic.data.AppSettings
 import com.calmyjane.jaymusic.data.PlaylistEntity
 import com.calmyjane.jaymusic.data.PlaylistSummary
 import com.calmyjane.jaymusic.data.PlaylistTrack
+import com.calmyjane.jaymusic.data.SongSort
 import com.calmyjane.jaymusic.data.ThemeMode
 import com.calmyjane.jaymusic.data.TrackEntity
 import com.calmyjane.jaymusic.playback.PlayResult
@@ -25,19 +26,13 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-enum class SongSort(val label: String) {
-    TITLE("Title"),
-    ARTIST("Artist"),
-    RATING("Rating"),
-    RECENT("Recently added"),
-    MOST_PLAYED("Most played"),
-}
 
 /** Which songs/folders to show depending on their download ("sync") state. */
 enum class SyncFilter(val label: String) {
@@ -93,6 +88,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         player.connect()
+        // The sort order is persisted: the playback service sorts the queue the same way when
+        // shuffle is turned off.
+        viewModelScope.launch {
+            val saved = container.settings.flow.first().songSort
+            songFilter.value = songFilter.value.copy(sort = saved)
+        }
+    }
+
+    fun setSort(sort: SongSort) {
+        songFilter.value = songFilter.value.copy(sort = sort)
+        viewModelScope.launch { container.settings.setSongSort(sort) }
     }
 
     override fun onCleared() {
@@ -123,13 +129,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         t.album?.lowercase()?.contains(term) == true
                 }
         }
-        return when (filter.sort) {
-            SongSort.TITLE -> filtered // already sorted by the database
-            SongSort.ARTIST -> filtered.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { "${it.artist.orEmpty()}\u0000${it.album.orEmpty()}\u0000${it.path}" })
-            SongSort.RATING -> filtered.sortedByDescending { it.rating }
-            SongSort.RECENT -> filtered.sortedByDescending { it.addedAt }
-            SongSort.MOST_PLAYED -> filtered.sortedByDescending { it.playCount }
-        }
+        return filtered.sortedWith(filter.sort.comparator)
     }
 
     // Folders

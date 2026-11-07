@@ -216,7 +216,11 @@ class MediaCache(
 
     fun clearAll() = _entries.value.keys.toList().forEach(::delete)
 
-    private fun removeExcluded(rules: FolderRules) {
+    /**
+     * Deletes stored copies of songs that must never be downloaded. Songs playing or queued next
+     * are protected and get deleted on a later call, once they are no longer in use.
+     */
+    fun removeExcluded(rules: FolderRules = library.folderRules.value) {
         _entries.value.keys.filter(rules::isExcluded).forEach(::delete)
     }
 

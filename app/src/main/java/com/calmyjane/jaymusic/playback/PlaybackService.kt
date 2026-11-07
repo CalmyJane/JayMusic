@@ -285,19 +285,21 @@ class PlaybackService : MediaSessionService() {
         schedulePrefetch()
     }
 
-    /** Shuffle off: back to the list's original order; the current song keeps playing. */
+    /**
+     * Shuffle off: the queue is sorted with the library's sort order (title, folders, artist,
+     * rating, date, ...); the current song keeps playing.
+     */
     private fun restoreLinearOrder() {
         val count = player.mediaItemCount
         if (count < 2) return
-        val remaining = LinkedHashMap<String, ArrayDeque<MediaItem>>()
-        for (i in 0 until count) {
-            val item = player.getMediaItemAt(i)
-            remaining.getOrPut(item.mediaId) { ArrayDeque() }.addLast(item)
-        }
+        val index = container.library.trackIndex.value
+        val comparator = container.settings.state.value.songSort.comparator
+        val items = List(count) { player.getMediaItemAt(it) }
+        val (known, unknown) = items.partition { index.containsKey(it.mediaId) }
         val target = ArrayList<MediaItem>(count)
-        for (id in linearOrder) remaining[id]?.removeFirstOrNull()?.let(target::add)
-        // Songs added later (play next, add to queue) go to the end.
-        remaining.values.forEach { target.addAll(it) }
+        target += known.sortedWith { a, b -> comparator.compare(index.getValue(a.mediaId), index.getValue(b.mediaId)) }
+        // Songs no longer in the library keep their place at the end.
+        target += unknown
         val currentId = player.currentMediaItem?.mediaId ?: return
         val position = target.indexOfFirst { it.mediaId == currentId }
         if (position < 0 || target.size != count) return
@@ -397,6 +399,7 @@ class PlaybackService : MediaSessionService() {
             if (previous != null && previous != path) {
                 scope.launch(Dispatchers.IO) {
                     container.mediaCache.refresh(previous)
+                    container.mediaCache.removeExcluded()
                     container.mediaCache.enforceBudget()
                 }
             }
