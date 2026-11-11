@@ -67,10 +67,9 @@ The budget is `min(user limit, cache size + free space − 500 MB)`.
 lock screen player from the session; custom `CommandButton`s add shuffle and repeat. It also
 
 - prefetches the next *n* items in play order (`Timeline.getNextWindowIndex` respects shuffle),
-- implements shuffle by reordering the queue itself (current song first, the rest in random
-  order) and keeping ExoPlayer's shuffle order equal to the queue order, so the queue view is
-  always the real play order; the list's original order is kept to restore it when shuffle is
-  turned off,
+- implements shuffle with ExoPlayer's shuffle order only (current song first, the rest random)
+  and keeps the wanted order as song ids, re-applying it whenever the queue changes, so "up next"
+  never reshuffles by itself; the queue's own order stays the list order for shuffle off,
 - reads the real tags (`Format.metadata`) of the playing song into the database,
 - counts plays after 30 s (or half the song),
 - persists the queue to `queue.json` and restores it on start and for playback resumption

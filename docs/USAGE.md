@@ -25,7 +25,7 @@
 
 - *On*: all other songs of the list follow in a new random order, which then stays fixed while
   you skip, so the "up next" list is exactly what will play.
-- *Off*: the list goes back to its original order (e.g. sorted by title).
+- *Off*: the list goes back to the order it was started with (the library's sort order).
 - Don't like what's coming up? Toggle shuffle off and on for a new random order.
 - *Previous* goes back to the song you actually heard before.
 

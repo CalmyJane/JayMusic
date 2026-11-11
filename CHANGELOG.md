@@ -31,9 +31,9 @@ All notable changes are documented here. The format follows
 - Tapping the connection card shows the error for every address tried.
 
 ### Changed
-- Shuffle reorders the queue itself: the upcoming songs stay fixed while skipping (before, they
-  could change after every skip). Turning shuffle off restores the original order; turning it on
-  again gives a new random order.
+- Shuffle keeps a fixed random order: the upcoming songs stay put while skipping (before, they
+  could change after every skip). Turning shuffle off goes back to the list's order (the library
+  sort it was started with); turning it on again gives a new random order.
 - Lock screen player: always portrait; new order from top to bottom: header with the current
   time, rating, queue, seek bar, previous/next, play/pause.
 - Lock screen queue: swipe a song to the left to remove it. The long-press menu now has the
@@ -59,6 +59,8 @@ All notable changes are documented here. The format follows
 - Settings redesigned as a clean list of equally sized rows; server account on its own page.
 
 ### Fixed
+- Pressing shuffle crashed the app: shuffle no longer rewrites the whole queue, it only sets the
+  play order.
 - Songs marked "never download" that were playing or queued at that moment are now also deleted
   from the phone as soon as they are no longer in use.
 - Swiping the paused player notification away removes it for good (it came back once before):

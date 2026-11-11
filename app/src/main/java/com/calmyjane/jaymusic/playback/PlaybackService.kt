@@ -196,11 +196,12 @@ class PlaybackService : MediaSessionService() {
     private var backTarget: String? = null
 
     /**
-     * The queue in the order the list was started with (e.g. sorted by title). Shuffle physically
-     * reorders the queue, so the upcoming songs shown are exactly what plays next and stay put
-     * while skipping; turning shuffle off restores this order.
+     * Wanted play order while shuffle is on, as song ids. The queue itself always keeps the order
+     * the list was started with (so turning shuffle off goes back to it); shuffle only sets
+     * ExoPlayer's shuffle order. This list is re-applied whenever the queue changes, so the
+     * "up next" songs never get reshuffled by themselves while skipping.
      */
-    private var linearOrder: List<String> = emptyList()
+    private var shuffleIds: MutableList<String> = mutableListOf()
 
     /** True while restoring the saved queue; its order must not be changed. */
     private var restoring = false
@@ -231,83 +232,84 @@ class PlaybackService : MediaSessionService() {
         return false
     }
 
-    /** Drag and drop in the queue view: puts [from] before or after [to]. */
+    /** Drag and drop in the queue view: puts [from] before or after [to] in play order. */
     private fun moveInPlayOrder(from: Int, to: Int, after: Boolean) {
         val count = player.mediaItemCount
         if (from !in 0 until count || to !in 0 until count || from == to) return
-        // The queue order is the play order (see linearOrder), so a plain move does it.
-        // moveMediaItem inserts at the index in the list without the moved item.
-        val target = when {
-            after && from > to -> to + 1
-            !after && from < to -> to - 1
-            else -> to
+        if (player.shuffleModeEnabled) {
+            val order = currentPlayOrder()
+            order.remove(from)
+            order.add(order.indexOf(to) + if (after) 1 else 0, from)
+            shuffleIds = order.mapTo(mutableListOf()) { player.getMediaItemAt(it).mediaId }
+            applyShuffleOrder()
+        } else {
+            // moveMediaItem inserts at the index in the list without the moved item.
+            val target = when {
+                after && from > to -> to + 1
+                !after && from < to -> to - 1
+                else -> to
+            }
+            player.moveMediaItem(from, target)
         }
-        player.moveMediaItem(from, target)
         schedulePrefetch()
     }
 
-    /**
-     * Keeps ExoPlayer's own shuffle order equal to the queue order. Shuffling is done by
-     * reordering the queue itself, so the shown "up next" list never changes on its own.
-     */
-    private fun ensureQueueOrderIsPlayOrder() {
-        val count = player.mediaItemCount
-        if (count == 0) return
+    /** Queue indices in the order ExoPlayer will play them right now. */
+    private fun currentPlayOrder(): MutableList<Int> {
         val timeline = player.currentTimeline
-        var identity = timeline.getFirstWindowIndex(true) == 0
-        var i = 0
-        while (identity && i < count - 1) {
-            identity = timeline.getNextWindowIndex(i, Player.REPEAT_MODE_OFF, true) == i + 1
-            i++
+        val order = ArrayList<Int>(player.mediaItemCount)
+        var i = timeline.getFirstWindowIndex(player.shuffleModeEnabled)
+        while (i != C.INDEX_UNSET && order.size < player.mediaItemCount) {
+            order += i
+            i = timeline.getNextWindowIndex(i, Player.REPEAT_MODE_OFF, player.shuffleModeEnabled)
         }
-        if (!identity) player.setShuffleOrder(ShuffleOrder.UnshuffledShuffleOrder(count))
-    }
-
-    /** A new list was started (from the app): remember its order and shuffle it if needed. */
-    private fun onNewList() {
-        linearOrder = List(player.mediaItemCount) { player.getMediaItemAt(it).mediaId }
-        if (player.shuffleModeEnabled) shuffleUpcoming() else ensureQueueOrderIsPlayOrder()
+        return order
     }
 
     /**
-     * Shuffle on: the current song moves to the top and all other songs follow in a new random
-     * order. Playback is not interrupted.
+     * Makes ExoPlayer's shuffle order match [shuffleIds]. Removed songs are dropped, songs added
+     * later go to the end. Does nothing if the order already matches (so calling it from
+     * onTimelineChanged does not loop).
      */
+    private fun applyShuffleOrder() {
+        val count = player.mediaItemCount
+        if (!player.shuffleModeEnabled || count == 0) return
+        val indicesById = HashMap<String, ArrayDeque<Int>>()
+        for (i in 0 until count) indicesById.getOrPut(player.getMediaItemAt(i).mediaId) { ArrayDeque() }.addLast(i)
+        val order = ArrayList<Int>(count)
+        for (id in shuffleIds) indicesById[id]?.removeFirstOrNull()?.let(order::add)
+        val used = order.toHashSet()
+        for (i in 0 until count) if (i !in used) order += i
+        shuffleIds = order.mapTo(mutableListOf()) { player.getMediaItemAt(it).mediaId }
+        if (order != currentPlayOrder()) {
+            player.setShuffleOrder(ShuffleOrder.DefaultShuffleOrder(order.toIntArray(), System.nanoTime()))
+        }
+    }
+
+    /** A new list was started (from the app): shuffle it if shuffle is on. */
+    private fun onNewList() {
+        if (player.shuffleModeEnabled) shuffleUpcoming()
+    }
+
+    /** Shuffle on: the current song first, then all other songs in a new random order. */
     private fun shuffleUpcoming() {
         val count = player.mediaItemCount
-        if (count >= 2) {
-            val current = player.currentMediaItemIndex
-            if (current != 0) player.moveMediaItem(current, 0)
-            val others = (1 until count).map { player.getMediaItemAt(it) }.shuffled()
-            player.replaceMediaItems(1, count, others)
-        }
-        ensureQueueOrderIsPlayOrder()
+        if (count == 0) return
+        val current = player.currentMediaItemIndex
+        val order = listOf(current) + (0 until count).filter { it != current }.shuffled()
+        shuffleIds = order.mapTo(mutableListOf()) { player.getMediaItemAt(it).mediaId }
+        applyShuffleOrder()
         schedulePrefetch()
     }
 
-    /**
-     * Shuffle off: the queue is sorted with the library's sort order (title, folders, artist,
-     * rating, date, ...); the current song keeps playing.
-     */
-    private fun restoreLinearOrder() {
-        val count = player.mediaItemCount
-        if (count < 2) return
-        val index = container.library.trackIndex.value
-        val comparator = container.settings.state.value.songSort.comparator
-        val items = List(count) { player.getMediaItemAt(it) }
-        val (known, unknown) = items.partition { index.containsKey(it.mediaId) }
-        val target = ArrayList<MediaItem>(count)
-        target += known.sortedWith { a, b -> comparator.compare(index.getValue(a.mediaId), index.getValue(b.mediaId)) }
-        // Songs no longer in the library keep their place at the end.
-        target += unknown
-        val currentId = player.currentMediaItem?.mediaId ?: return
-        val position = target.indexOfFirst { it.mediaId == currentId }
-        if (position < 0 || target.size != count) return
-        val current = player.currentMediaItemIndex
-        // Replace around the current song so it keeps playing.
-        player.replaceMediaItems(current + 1, count, target.subList(position + 1, target.size))
-        player.replaceMediaItems(0, current, target.subList(0, position))
-        ensureQueueOrderIsPlayOrder()
+    /** "Play next" with shuffle on: puts the song at [index] right after the current one. */
+    private fun makeNext(index: Int) {
+        if (!player.shuffleModeEnabled || index !in 0 until player.mediaItemCount) return
+        val order = currentPlayOrder()
+        order.remove(index)
+        order.add(order.indexOf(player.currentMediaItemIndex) + 1, index)
+        shuffleIds = order.mapTo(mutableListOf()) { player.getMediaItemAt(it).mediaId }
+        applyShuffleOrder()
         schedulePrefetch()
     }
 
@@ -341,7 +343,7 @@ class PlaybackService : MediaSessionService() {
             args: Bundle,
         ): ListenableFuture<SessionResult> {
             when (customCommand.customAction) {
-                CMD_MAKE_NEXT -> ensureQueueOrderIsPlayOrder()
+                CMD_MAKE_NEXT -> makeNext(args.getInt(EXTRA_INDEX, -1))
                 CMD_NEW_LIST -> try {
                     onNewList()
                 } catch (e: Exception) {
@@ -411,7 +413,7 @@ class PlaybackService : MediaSessionService() {
         override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
             if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) {
                 if (player.shuffleModeEnabled) {
-                    runCatching { ensureQueueOrderIsPlayOrder() }.onFailure { CrashLog.nonFatal("Keeping play order failed", it) }
+                    runCatching { applyShuffleOrder() }.onFailure { CrashLog.nonFatal("Keeping play order failed", it) }
                 }
                 schedulePrefetch()
                 saveQueueSoon()
@@ -423,7 +425,8 @@ class PlaybackService : MediaSessionService() {
             if (!restoring) {
                 // Reordering must never take playback down; worst case the order stays as it is.
                 try {
-                    if (shuffleModeEnabled) shuffleUpcoming() else restoreLinearOrder()
+                    // Off: ExoPlayer plays the queue in its own (start) order again.
+                    if (shuffleModeEnabled) shuffleUpcoming() else shuffleIds.clear()
                 } catch (e: Exception) {
                     CrashLog.nonFatal("Reordering queue for shuffle=$shuffleModeEnabled failed", e)
                 }
@@ -631,7 +634,7 @@ class PlaybackService : MediaSessionService() {
             positionMs = player.currentPosition,
             shuffle = player.shuffleModeEnabled,
             repeatMode = player.repeatMode,
-            linear = linearOrder,
+            shuffleOrder = if (player.shuffleModeEnabled) shuffleIds.toList() else emptyList(),
         )
     }
 
@@ -672,14 +675,14 @@ class PlaybackService : MediaSessionService() {
             if (player.mediaItemCount > 0) return@launch // The user already started something.
             player.repeatMode = restored.saved.repeatMode
             player.setMediaItems(restored.items, restored.index, restored.positionMs)
-            linearOrder = restored.saved.linear.ifEmpty { restored.items.map { it.mediaId } }
-            // Set after the items so the saved (already shuffled) order is kept as it is.
-            if (player.shuffleModeEnabled != restored.saved.shuffle) {
+            if (restored.saved.shuffle) {
+                // Keep the saved shuffle order instead of making a new one.
                 restoring = true
-                player.shuffleModeEnabled = restored.saved.shuffle
+                player.shuffleModeEnabled = true
                 restoring = false
+                shuffleIds = restored.saved.shuffleOrder.toMutableList()
+                applyShuffleOrder()
             }
-            ensureQueueOrderIsPlayOrder()
         }
     }
 
