@@ -246,24 +246,32 @@ class PlayerConnection(
      */
     fun upcoming(count: Int): List<QueueEntry> {
         val c = controller ?: return emptyList()
-        val timeline = c.currentTimeline
-        if (timeline.isEmpty) return emptyList()
-        val repeat = if (c.repeatMode == Player.REPEAT_MODE_ALL) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
-        val result = mutableListOf<QueueEntry>()
-        var index = c.currentMediaItemIndex
-        while (index != androidx.media3.common.C.INDEX_UNSET && result.size <= count) {
-            val item = c.getMediaItemAt(index)
-            result += QueueEntry(
-                index = index,
-                mediaId = item.mediaId,
-                title = item.mediaMetadata.title?.toString().orEmpty(),
-                artist = item.mediaMetadata.artist?.toString().orEmpty(),
-                isCurrent = index == c.currentMediaItemIndex,
-            )
-            index = timeline.getNextWindowIndex(index, repeat, c.shuffleModeEnabled)
-            if (index == c.currentMediaItemIndex) break
+        // The controller's state can be briefly inconsistent while the service changes the queue
+        // (e.g. fast shuffle taps); never let that take the screen down.
+        return try {
+            val timeline = c.currentTimeline
+            if (timeline.isEmpty) return emptyList()
+            val windowCount = timeline.windowCount
+            val repeat = if (c.repeatMode == Player.REPEAT_MODE_ALL) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
+            val result = mutableListOf<QueueEntry>()
+            val seen = HashSet<Int>()
+            var index = c.currentMediaItemIndex
+            while (index in 0 until windowCount && index < c.mediaItemCount && seen.add(index) && result.size <= count) {
+                val item = c.getMediaItemAt(index)
+                result += QueueEntry(
+                    index = index,
+                    mediaId = item.mediaId,
+                    title = item.mediaMetadata.title?.toString().orEmpty(),
+                    artist = item.mediaMetadata.artist?.toString().orEmpty(),
+                    isCurrent = index == c.currentMediaItemIndex,
+                )
+                index = timeline.getNextWindowIndex(index, repeat, c.shuffleModeEnabled)
+            }
+            result
+        } catch (e: RuntimeException) {
+            com.calmyjane.jaymusic.CrashLog.nonFatal("Reading the queue failed", e)
+            emptyList()
         }
-        return result
     }
 
     /**

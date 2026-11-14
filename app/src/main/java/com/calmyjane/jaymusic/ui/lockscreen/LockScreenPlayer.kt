@@ -348,6 +348,8 @@ private fun QueueList(
         val target = info.firstOrNull {
             it.key != draggingKey && it.index >= 1 && center.toInt() in it.offset..(it.offset + it.size)
         } ?: return
+        // Layout info can lag behind the list for a frame (e.g. right after a queue update).
+        if (dragged.index !in display.indices || target.index !in display.indices) return
         display = display.toMutableList().apply { add(target.index, removeAt(dragged.index)) }
         dragOffset += dragged.offset - target.offset
     }

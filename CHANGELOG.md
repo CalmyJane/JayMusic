@@ -59,6 +59,8 @@ All notable changes are documented here. The format follows
 - Settings redesigned as a clean list of equally sized rows; server account on its own page.
 
 ### Fixed
+- Fast taps on the lock screen player (shuffle, queue) could crash the app: the queue view, drag
+  and drop and all player commands now tolerate a queue that is changing at the same moment.
 - Pressing shuffle crashed the app: shuffle no longer rewrites the whole queue, it only sets the
   play order.
 - Songs marked "never download" that were playing or queued at that moment are now also deleted

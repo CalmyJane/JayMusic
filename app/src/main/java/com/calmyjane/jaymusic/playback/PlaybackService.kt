@@ -342,21 +342,23 @@ class PlaybackService : MediaSessionService() {
             customCommand: SessionCommand,
             args: Bundle,
         ): ListenableFuture<SessionResult> {
-            when (customCommand.customAction) {
-                CMD_MAKE_NEXT -> makeNext(args.getInt(EXTRA_INDEX, -1))
-                CMD_NEW_LIST -> try {
-                    onNewList()
-                } catch (e: Exception) {
-                    CrashLog.nonFatal("Preparing new list failed", e)
+            // A failing command must never take playback (and the app) down.
+            try {
+                when (customCommand.customAction) {
+                    CMD_MAKE_NEXT -> makeNext(args.getInt(EXTRA_INDEX, -1))
+                    CMD_NEW_LIST -> onNewList()
+                    CMD_MOVE -> moveInPlayOrder(args.getInt(EXTRA_FROM, -1), args.getInt(EXTRA_INDEX, -1), args.getBoolean(EXTRA_AFTER))
+                    CMD_SHUFFLE_ON -> player.shuffleModeEnabled = true
+                    CMD_SHUFFLE_OFF -> player.shuffleModeEnabled = false
+                    CMD_CYCLE_REPEAT -> player.repeatMode = when (player.repeatMode) {
+                        Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                        Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                        else -> Player.REPEAT_MODE_OFF
+                    }
                 }
-                CMD_MOVE -> moveInPlayOrder(args.getInt(EXTRA_FROM, -1), args.getInt(EXTRA_INDEX, -1), args.getBoolean(EXTRA_AFTER))
-                CMD_SHUFFLE_ON -> player.shuffleModeEnabled = true
-                CMD_SHUFFLE_OFF -> player.shuffleModeEnabled = false
-                CMD_CYCLE_REPEAT -> player.repeatMode = when (player.repeatMode) {
-                    Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
-                    Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
-                    else -> Player.REPEAT_MODE_OFF
-                }
+            } catch (e: Exception) {
+                CrashLog.nonFatal("Command ${customCommand.customAction} failed", e)
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_UNKNOWN))
             }
             return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
