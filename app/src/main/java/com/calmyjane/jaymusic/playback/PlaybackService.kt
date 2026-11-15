@@ -25,6 +25,7 @@ import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
 import com.calmyjane.jaymusic.AppContainer
 import com.calmyjane.jaymusic.CrashLog
@@ -358,7 +359,7 @@ class PlaybackService : MediaSessionService() {
                 }
             } catch (e: Exception) {
                 CrashLog.nonFatal("Command ${customCommand.customAction} failed", e)
-                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_UNKNOWN))
+                return Futures.immediateFuture(SessionResult(SessionError.ERROR_UNKNOWN))
             }
             return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
