@@ -70,6 +70,7 @@ class PlaybackService : MediaSessionService() {
     /** Song whose play was already counted, so it is counted once per listen. */
     private var countedPath: String? = null
     private var currentPath: String? = null
+    private var currentItem: MediaItem? = null
     private val taggedPaths = HashSet<String>()
     private var consecutiveErrors = 0
     private var lastPlaybackState = Player.STATE_IDLE
@@ -187,10 +188,13 @@ class PlaybackService : MediaSessionService() {
         return listOf(previousButton, nextButton, shuffleButton, repeatButton)
     }
 
-    // Shuffle history
+    // Play history
 
-    /** Songs actually played, most recent last, so "previous" in shuffle mode goes back in time. */
-    private val history = ArrayDeque<String>()
+    /**
+     * Songs actually played (also ones skipped after a few seconds), most recent last, so
+     * "previous" goes back in time, with and without shuffle, also across newly started lists.
+     */
+    private val history = ArrayDeque<MediaItem>()
 
     /** Song we are going back to; its transition must not be added to the history. */
     private var backTarget: String? = null
@@ -208,7 +212,8 @@ class PlaybackService : MediaSessionService() {
 
     /**
      * Wraps the player for the media session (app, notification, lock screen, headset):
-     * "previous" in shuffle mode returns to the song that was really played before.
+     * "previous" returns to the song that was really played before, even if it is no longer in
+     * the queue (it is put back right before the current song).
      */
     private inner class HistoryPlayer(player: Player) : ForwardingPlayer(player) {
         override fun seekToPrevious() {
@@ -218,18 +223,66 @@ class PlaybackService : MediaSessionService() {
         override fun seekToPreviousMediaItem() {
             if (!goBackInHistory()) super.seekToPreviousMediaItem()
         }
+
+        override fun hasPreviousMediaItem(): Boolean = history.isNotEmpty() || super.hasPreviousMediaItem()
+
+        override fun getAvailableCommands(): Player.Commands {
+            val commands = super.getAvailableCommands()
+            return if (history.isNotEmpty() && player.mediaItemCount > 0) {
+                commands.buildUpon().add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM).add(Player.COMMAND_SEEK_TO_PREVIOUS).build()
+            } else {
+                commands
+            }
+        }
+
+        override fun isCommandAvailable(command: Int): Boolean = availableCommands.contains(command)
     }
 
+    /**
+     * Goes back to the last played song. It is placed right before the current song in play
+     * order (inserted if it is not in the queue any more), so "next" afterwards returns to the
+     * song we came from.
+     */
     private fun goBackInHistory(): Boolean {
-        if (!player.shuffleModeEnabled) return false
+        if (player.mediaItemCount == 0) return false
+        val currentId = player.currentMediaItem?.mediaId
         while (history.isNotEmpty()) {
-            val path = history.removeLast()
-            val index = (0 until player.mediaItemCount).firstOrNull { player.getMediaItemAt(it).mediaId == path } ?: continue
-            backTarget = path
-            player.seekTo(index, 0)
+            val item = history.removeLast()
+            if (item.mediaId == currentId) continue
+            // Offline, songs that are not on the phone cannot be played.
+            if (!container.connection.isOnline && !container.mediaCache.isComplete(item.mediaId)) continue
+            backTarget = item.mediaId
+            val target = placeBeforeCurrent(item)
+            player.seekTo(target, 0)
+            if (player.playbackState == Player.STATE_IDLE) player.prepare()
             return true
         }
         return false
+    }
+
+    /** Puts [item] directly before the current song in play order; returns its queue index. */
+    private fun placeBeforeCurrent(item: MediaItem): Int {
+        val existing = (0 until player.mediaItemCount).firstOrNull { player.getMediaItemAt(it).mediaId == item.mediaId }
+        if (player.shuffleModeEnabled) {
+            val index = existing ?: player.mediaItemCount.also { player.addMediaItem(item) }
+            val current = player.currentMediaItemIndex
+            val order = currentPlayOrder()
+            order.remove(index)
+            order.add(order.indexOf(current).coerceAtLeast(0), index)
+            shuffleIds = order.mapTo(mutableListOf()) { player.getMediaItemAt(it).mediaId }
+            applyShuffleOrder()
+            return index
+        }
+        val current = player.currentMediaItemIndex
+        if (existing == null) {
+            player.addMediaItem(current, item)
+            return current
+        }
+        return when {
+            existing == current - 1 -> existing
+            existing < current -> (current - 1).also { player.moveMediaItem(existing, it) }
+            else -> current.also { player.moveMediaItem(existing, it) }
+        }
     }
 
     /** Drag and drop in the queue view: puts [from] before or after [to] in play order. */
@@ -387,11 +440,12 @@ class PlaybackService : MediaSessionService() {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             val path = mediaItem?.mediaId
             val previous = currentPath
-            if (previous != null && previous != path) {
+            val previousItem = currentItem
+            if (previousItem != null && previous != null && previous != path) {
                 if (backTarget == path) {
                     backTarget = null
                 } else {
-                    history.addLast(previous)
+                    history.addLast(previousItem)
                     if (history.size > MAX_HISTORY) history.removeFirst()
                 }
             }
@@ -399,6 +453,7 @@ class PlaybackService : MediaSessionService() {
                 countedPath = null
             }
             currentPath = path
+            currentItem = mediaItem
             // The previous song may now be completely stored (it was cached while streaming).
             if (previous != null && previous != path) {
                 scope.launch(Dispatchers.IO) {

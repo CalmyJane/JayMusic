@@ -107,6 +107,14 @@ private fun AppRoot(vm: MainViewModel) {
                 Column {
                     MiniPlayer(vm, onOpen = { playerOpen = true })
                     NavigationBar(containerColor = MaterialTheme.colorScheme.background) {
+                        // Not a tab: opens the big lock screen player. Press the power button
+                        // afterwards and it is what you see when the screen turns on.
+                        NavigationBarItem(
+                            selected = false,
+                            onClick = { context.startActivity(LockScreenActivity.intent(context, stayAfterUnlock = true)) },
+                            icon = { Icon(Icons.Filled.ScreenLockPortrait, contentDescription = null, modifier = Modifier.size(30.dp)) },
+                            label = { Text("Lock player") },
+                        )
                         Tab.entries.forEach { t ->
                             NavigationBarItem(
                                 selected = tab == t && page == null,
@@ -128,14 +136,6 @@ private fun AppRoot(vm: MainViewModel) {
                                 ),
                             )
                         }
-                        // Not a tab: opens the big lock screen player. Press the power button
-                        // afterwards and it is what you see when the screen turns on.
-                        NavigationBarItem(
-                            selected = false,
-                            onClick = { context.startActivity(LockScreenActivity.intent(context, stayAfterUnlock = true)) },
-                            icon = { Icon(Icons.Filled.ScreenLockPortrait, contentDescription = null, modifier = Modifier.size(30.dp)) },
-                            label = { Text("Lock player") },
-                        )
                     }
                 }
             },

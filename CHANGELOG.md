@@ -31,6 +31,13 @@ All notable changes are documented here. The format follows
 - Tapping the connection card shows the error for every address tried.
 
 ### Changed
+- "Previous" goes back through the songs really played, with and without shuffle, also to songs
+  that were skipped or that are no longer in the queue (they are put back before the current
+  song, so "next" returns to where you were).
+- Lock screen queue: separator lines between songs, the playing song is highlighted, rows are a
+  bit lower.
+- Bottom navigation: lock player button moved to the far left (lock player, library, playlists,
+  settings).
 - Shuffle keeps a fixed random order: the upcoming songs stay put while skipping (before, they
   could change after every skip). Turning shuffle off goes back to the list's order (the library
   sort it was started with); turning it on again gives a new random order.
@@ -59,6 +66,8 @@ All notable changes are documented here. The format follows
 - Settings redesigned as a clean list of equally sized rows; server account on its own page.
 
 ### Fixed
+- Tapping a song in the lock screen queue could start a different song when the queue had
+  changed in the meantime; taps during scrolling or on the line between two songs are ignored.
 - Fast taps on the lock screen player (shuffle, queue) could crash the app: the queue view, drag
   and drop and all player commands now tolerate a queue that is changing at the same moment.
 - Pressing shuffle crashed the app: shuffle no longer rewrites the whole queue, it only sets the

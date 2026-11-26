@@ -291,5 +291,21 @@ class PlayerConnection(
 
     fun removeFromQueue(index: Int) = withController { it.removeMediaItem(index) }
 
-    fun skipToQueueIndex(index: Int) = withController { it.seekTo(index, 0) }
+    /**
+     * Jumps to the queue entry [entry]. Its index is checked against its song first: if the queue
+     * changed since the list was drawn (e.g. a song was removed), the song is looked up by id
+     * instead, so a tap never starts a different song.
+     */
+    fun skipTo(entry: QueueEntry) = withController { c ->
+        val count = c.mediaItemCount
+        val index = if (entry.index in 0 until count && c.getMediaItemAt(entry.index).mediaId == entry.mediaId) {
+            entry.index
+        } else {
+            (0 until count).firstOrNull { c.getMediaItemAt(it).mediaId == entry.mediaId } ?: return@withController
+        }
+        if (index == c.currentMediaItemIndex) return@withController
+        c.seekTo(index, 0)
+        if (c.playbackState == Player.STATE_IDLE) c.prepare()
+        c.play()
+    }
 }

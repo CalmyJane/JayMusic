@@ -16,6 +16,9 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -114,6 +117,8 @@ import kotlinx.coroutines.launch
 
 private val Gray = Color(0xFFBDBDBD)
 private val DimGray = Color(0xFF616161)
+private val Separator = Color(0xFF2C2C2C)
+private val CurrentRow = Color(0xFF1E1E1E)
 
 @Composable
 fun LockScreenPlayer(
@@ -396,9 +401,11 @@ private fun QueueList(
                     detectTapGestures(
                         onLongPress = { },
                         onTap = { offset ->
+                            if (draggingKey != null || listState.isScrollInProgress) return@detectTapGestures
+                            // Exact hit only: a tap on the line between two songs does nothing.
                             val key = listState.layoutInfo.visibleItemsInfo
-                                .firstOrNull { offset.y.toInt() in it.offset..(it.offset + it.size) }?.key
-                            entries.firstOrNull { keyOf(it) == key }?.let { player.skipToQueueIndex(it.index) }
+                                .firstOrNull { offset.y.toInt() in it.offset until (it.offset + it.size) }?.key
+                            display.firstOrNull { keyOf(it) == key }?.let(player::skipTo)
                         },
                     )
                 }
@@ -490,8 +497,22 @@ private fun QueueRow(entry: PlayerConnection.QueueEntry, dragging: Boolean, modi
     Row(
         modifier
             .fillMaxWidth()
-            .height(52.dp)
-            .background(if (dragging) Color(0xFF262626) else Color.Black)
+            .height(48.dp)
+            .background(
+                when {
+                    dragging -> Color(0xFF262626)
+                    entry.isCurrent -> CurrentRow
+                    else -> Color.Black
+                },
+            )
+            .drawBehind {
+                // Playing song: white bar on the left. Others: thin separator line at the bottom.
+                if (entry.isCurrent) {
+                    drawRect(Color.White, size = Size(3.dp.toPx(), size.height))
+                }
+                val line = 1.dp.toPx()
+                drawRect(Separator, topLeft = Offset(0f, size.height - line), size = Size(size.width, line))
+            }
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -552,7 +573,7 @@ private fun QueueEntryMenu(
                         modifier = Modifier.padding(bottom = 4.dp),
                     )
                 }
-                MenuRow(Icons.Filled.PlayArrow, "Play now") { player.skipToQueueIndex(entry.index); onDismiss() }
+                MenuRow(Icons.Filled.PlayArrow, "Play now") { player.skipTo(entry); onDismiss() }
                 if (!entry.isCurrent && currentIndex != null) {
                     MenuRow(Icons.Filled.SkipNext, "Play next") {
                         player.moveInQueue(entry.index, currentIndex, after = true)
