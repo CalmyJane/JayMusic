@@ -34,6 +34,12 @@ object CrashLog {
         write("ERROR: $what", error)
     }
 
+    /** Records a notable event without an exception (e.g. why a song was skipped). */
+    fun note(what: String) {
+        Log.i(TAG, what)
+        write("NOTE: $what", null)
+    }
+
     fun read(): String = runCatching { if (::file.isInitialized && file.exists()) file.readText() else "" }.getOrDefault("")
 
     fun clear() {
@@ -41,10 +47,10 @@ object CrashLog {
     }
 
     @Synchronized
-    private fun write(title: String, error: Throwable) {
+    private fun write(title: String, error: Throwable?) {
         if (!::file.isInitialized) return
         runCatching {
-            val trace = StringWriter().also { error.printStackTrace(PrintWriter(it)) }.toString()
+            val trace = error?.let { e -> StringWriter().also { e.printStackTrace(PrintWriter(it)) }.toString() }.orEmpty()
             val entry = buildString {
                 append("=== ").append(DateFormat.getDateTimeInstance().format(Date())).append(" · ")
                 append(title).append('\n')

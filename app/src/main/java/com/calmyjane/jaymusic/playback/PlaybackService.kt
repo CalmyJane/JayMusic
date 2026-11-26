@@ -203,6 +203,9 @@ class PlaybackService : MediaSessionService() {
      */
     private var pickedPath: String? = null
 
+    /** Picked song that was already retried once after a playback error. */
+    private var retriedPath: String? = null
+
     /** Song we are going back to; its transition must not be added to the history. */
     private var backTarget: String? = null
 
@@ -234,6 +237,8 @@ class PlaybackService : MediaSessionService() {
         /** Only direct jumps from controllers arrive here; the service's own seeks bypass it. */
         override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
             pickedPath = runCatching { player.getMediaItemAt(mediaItemIndex).mediaId }.getOrNull()
+            retriedPath = null
+            CrashLog.note("Jump to #$mediaItemIndex = ${describe(pickedPath)}")
             super.seekTo(mediaItemIndex, positionMs)
         }
 
@@ -467,6 +472,9 @@ class PlaybackService : MediaSessionService() {
             }
             currentPath = path
             currentItem = mediaItem
+            if (pickedPath != null && path != pickedPath && reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK) {
+                CrashLog.note("Picked ${describe(pickedPath)} but now playing ${describe(path)}")
+            }
             if (path != pickedPath) pickedPath = null
             // The previous song may now be completely stored (it was cached while streaming).
             if (previous != null && previous != path) {
@@ -544,13 +552,35 @@ class PlaybackService : MediaSessionService() {
 
         override fun onPlayerError(error: PlaybackException) {
             Log.w(TAG, "Playback error for $currentPath: ${error.errorCodeName}", error)
-            currentPath?.let { path -> scope.launch(Dispatchers.IO) { container.mediaCache.refresh(path) } }
+            val path = currentPath
+            path?.let { scope.launch(Dispatchers.IO) { container.mediaCache.refresh(it) } }
             if (++consecutiveErrors > player.mediaItemCount.coerceAtMost(MAX_CONSECUTIVE_ERRORS)) {
                 consecutiveErrors = 0
+                CrashLog.note("Playback error for ${describe(path)} (${error.errorCodeName}); giving up")
                 return // Give up; the user can pick something else.
+            }
+            // A song the user picked is tried once more before anything else happens, and then
+            // only the song right after it is tried: never jump far away from the user's choice.
+            if (path != null && path == pickedPath) {
+                if (retriedPath != path) {
+                    retriedPath = path
+                    CrashLog.note("Playback error for picked ${describe(path)} (${error.errorCodeName}); retrying")
+                    player.prepare()
+                    player.play()
+                    return
+                }
+                val next = nextIndex { true }
+                CrashLog.note("Playback error for picked ${describe(path)} (${error.errorCodeName}) again; next song")
+                if (next != null) {
+                    player.seekTo(next, 0)
+                    player.prepare()
+                    player.play()
+                }
+                return
             }
             val next = nextIndex { container.mediaCache.isComplete(it) }
                 ?: if (container.connection.isOnline) nextIndex { true } else null
+            CrashLog.note("Playback error for ${describe(path)} (${error.errorCodeName}); skipping to ${next?.let { describe(player.getMediaItemAt(it).mediaId) }}")
             if (next != null) {
                 player.seekTo(next, 0)
                 player.prepare()
@@ -567,7 +597,14 @@ class PlaybackService : MediaSessionService() {
     private fun skipIfUnavailable() {
         val path = player.currentMediaItem?.mediaId ?: return
         if (container.connection.isOnline || container.mediaCache.isComplete(path)) return
+        if (path == pickedPath) {
+            // Picked while offline (it is shown dimmed): stay on it instead of jumping elsewhere.
+            CrashLog.note("Picked ${describe(path)} is not on the phone and the NAS is not reachable (${container.connection.state.value}); paused")
+            player.pause()
+            return
+        }
         val next = nextIndex { container.mediaCache.isComplete(it) }
+        CrashLog.note("Offline, ${describe(path)} is not on the phone; skipping to ${next?.let { describe(player.getMediaItemAt(it).mediaId) }}")
         if (next != null) {
             player.seekTo(next, 0)
         } else {
@@ -583,10 +620,13 @@ class PlaybackService : MediaSessionService() {
             if (player.playbackState != Player.STATE_BUFFERING || !player.playWhenReady) return@launch
             if (container.mediaCache.isComplete(path)) return@launch
             if (path == pickedPath) return@launch
-            Log.i(TAG, "$path does not start, skipping to a downloaded song")
-            nextIndex { container.mediaCache.isComplete(it) }?.let { player.seekTo(it, 0) }
+            val next = nextIndex { container.mediaCache.isComplete(it) }
+            CrashLog.note("${describe(path)} does not start; skipping to ${next?.let { describe(player.getMediaItemAt(it).mediaId) }}")
+            next?.let { player.seekTo(it, 0) }
         }
     }
+
+    private fun describe(path: String?): String = path?.substringAfterLast('/') ?: "nothing"
 
     /** Next queue index (following shuffle order) whose song satisfies [accept]. */
     private fun nextIndex(accept: (String) -> Boolean): Int? {

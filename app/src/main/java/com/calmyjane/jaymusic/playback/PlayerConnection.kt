@@ -304,6 +304,7 @@ class PlayerConnection(
             (0 until count).firstOrNull { c.getMediaItemAt(it).mediaId == entry.mediaId } ?: return@withController
         }
         if (index == c.currentMediaItemIndex) return@withController
+        com.calmyjane.jaymusic.CrashLog.note("Queue tap: ${entry.title} (#${entry.index}, playing #$index)")
         c.seekTo(index, 0)
         if (c.playbackState == Player.STATE_IDLE) c.prepare()
         c.play()

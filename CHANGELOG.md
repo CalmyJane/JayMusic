@@ -73,6 +73,10 @@ All notable changes are documented here. The format follows
   replaced by the next downloaded song, which looked like a random song was started. Picked songs
   are now never skipped for starting slowly. A tap only counts if the list did not move between
   pressing and releasing.
+- A picked song that failed to play was replaced by the next downloaded song anywhere in the
+  (shuffled) queue. Now it is retried once, then only the song right after it is tried; offline,
+  a picked song that is not on the phone pauses instead of jumping away. Every automatic skip and
+  every queue tap is written to the error report (Settings) so remaining jumps can be traced.
 - Fast taps on the lock screen player (shuffle, queue) could crash the app: the queue view, drag
   and drop and all player commands now tolerate a queue that is changing at the same moment.
 - Pressing shuffle crashed the app: shuffle no longer rewrites the whole queue, it only sets the
