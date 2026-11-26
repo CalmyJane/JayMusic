@@ -197,6 +197,12 @@ class PlaybackService : MediaSessionService() {
      */
     private val history = ArrayDeque<MediaItem>()
 
+    /**
+     * Song the user picked directly (tap in the queue, "play now"). It is never skipped just
+     * because it takes long to start: the user asked for exactly this song.
+     */
+    private var pickedPath: String? = null
+
     /** Song we are going back to; its transition must not be added to the history. */
     private var backTarget: String? = null
 
@@ -223,6 +229,12 @@ class PlaybackService : MediaSessionService() {
 
         override fun seekToPreviousMediaItem() {
             if (!goBackInHistory()) super.seekToPreviousMediaItem()
+        }
+
+        /** Only direct jumps from controllers arrive here; the service's own seeks bypass it. */
+        override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
+            pickedPath = runCatching { player.getMediaItemAt(mediaItemIndex).mediaId }.getOrNull()
+            super.seekTo(mediaItemIndex, positionMs)
         }
 
         override fun hasPreviousMediaItem(): Boolean = history.isNotEmpty() || super.hasPreviousMediaItem()
@@ -455,6 +467,7 @@ class PlaybackService : MediaSessionService() {
             }
             currentPath = path
             currentItem = mediaItem
+            if (path != pickedPath) pickedPath = null
             // The previous song may now be completely stored (it was cached while streaming).
             if (previous != null && previous != path) {
                 scope.launch(Dispatchers.IO) {
@@ -569,6 +582,7 @@ class PlaybackService : MediaSessionService() {
             val path = player.currentMediaItem?.mediaId ?: return@launch
             if (player.playbackState != Player.STATE_BUFFERING || !player.playWhenReady) return@launch
             if (container.mediaCache.isComplete(path)) return@launch
+            if (path == pickedPath) return@launch
             Log.i(TAG, "$path does not start, skipping to a downloaded song")
             nextIndex { container.mediaCache.isComplete(it) }?.let { player.seekTo(it, 0) }
         }

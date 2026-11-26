@@ -35,7 +35,8 @@ All notable changes are documented here. The format follows
   that were skipped or that are no longer in the queue (they are put back before the current
   song, so "next" returns to where you were).
 - Lock screen queue: separator lines between songs, the playing song is highlighted, rows are a
-  bit lower.
+  bit lower; the list uses the full screen width without a rounded frame. Offline, songs that are
+  not on the phone are dimmed with a crossed-out cloud (they would be skipped).
 - Bottom navigation: lock player button moved to the far left (lock player, library, playlists,
   settings).
 - Shuffle keeps a fixed random order: the upcoming songs stay put while skipping (before, they
@@ -68,6 +69,10 @@ All notable changes are documented here. The format follows
 ### Fixed
 - Tapping a song in the lock screen queue could start a different song when the queue had
   changed in the meantime; taps during scrolling or on the line between two songs are ignored.
+- A song picked in the queue (or via "play now") that took more than 8 s to start streaming was
+  replaced by the next downloaded song, which looked like a random song was started. Picked songs
+  are now never skipped for starting slowly. A tap only counts if the list did not move between
+  pressing and releasing.
 - Fast taps on the lock screen player (shuffle, queue) could crash the app: the queue view, drag
   and drop and all player commands now tolerate a queue that is changing at the same moment.
 - Pressing shuffle crashed the app: shuffle no longer rewrites the whole queue, it only sets the

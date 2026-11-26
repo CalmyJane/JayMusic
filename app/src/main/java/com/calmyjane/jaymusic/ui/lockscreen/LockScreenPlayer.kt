@@ -17,6 +17,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.graphicsLayer
@@ -180,7 +181,18 @@ fun LockScreenPlayer(
             }
 
             // Up next.
-            QueueList(player, state, Modifier.weight(1.3f).fillMaxWidth(), onMenu = { menuFor = it })
+            // Offline, songs that are not on the phone are skipped; they are shown dimmed.
+            val connectionState by container.connection.state.collectAsStateWithLifecycle()
+            val cached by container.mediaCache.entries.collectAsStateWithLifecycle()
+            val online = connectionState is com.calmyjane.jaymusic.remote.ServerConnection.State.Online
+            QueueList(
+                player,
+                state,
+                // Full screen width: no side margins, no rounded frame.
+                Modifier.weight(1.3f).fillMaxWidth().bleed(12.dp),
+                isPlayable = { path -> online || cached[path]?.complete == true },
+                onMenu = { menuFor = it },
+            )
 
             Progress(player, state.isPlaying, state.currentPath, state.durationMs)
 
@@ -331,9 +343,12 @@ private fun QueueList(
     player: PlayerConnection,
     state: com.calmyjane.jaymusic.playback.PlayerUiState,
     modifier: Modifier,
+    isPlayable: (String) -> Boolean,
     onMenu: (PlayerConnection.QueueEntry) -> Unit,
 ) {
     val entries = remember(state) { player.upcoming(80) }
+    /** Song under the finger when it went down; a tap only counts if it is still the same song. */
+    var pressedKey by remember { mutableStateOf<Any?>(null) }
     var display by remember(entries) { mutableStateOf(entries) }
     val listState = rememberLazyListState()
     var draggingKey by remember { mutableStateOf<String?>(null) }
@@ -344,6 +359,10 @@ private fun QueueList(
     LaunchedEffect(state.currentPath) { if (draggingKey == null) listState.scrollToItem(0) }
 
     fun keyOf(e: PlayerConnection.QueueEntry) = "${e.index}:${e.mediaId}"
+
+    /** Key of the row at [y]; exact hit only, so a tap on the line between two songs is none. */
+    fun keyAt(y: Float): Any? = listState.layoutInfo.visibleItemsInfo
+        .firstOrNull { y.toInt() in it.offset until (it.offset + it.size) }?.key
 
     /** Swaps the dragged row with the row under its center. */
     fun swapIfNeeded() {
@@ -384,7 +403,11 @@ private fun QueueList(
 
     Column(
         modifier
-            .border(1.dp, DimGray, RoundedCornerShape(12.dp))
+            .drawBehind {
+                val line = 1.dp.toPx()
+                drawRect(DimGray, size = Size(size.width, line))
+                drawRect(DimGray, topLeft = Offset(0f, size.height - line), size = Size(size.width, line))
+            }
             // Taps and long presses inside the queue must not close the player.
             .pointerInput(Unit) { detectTapGestures { } },
     ) {
@@ -400,11 +423,15 @@ private fun QueueList(
                 .pointerInput(entries) {
                     detectTapGestures(
                         onLongPress = { },
+                        onPress = { offset ->
+                            pressedKey = if (listState.isScrollInProgress) null else keyAt(offset.y)
+                        },
                         onTap = { offset ->
                             if (draggingKey != null || listState.isScrollInProgress) return@detectTapGestures
-                            // Exact hit only: a tap on the line between two songs does nothing.
-                            val key = listState.layoutInfo.visibleItemsInfo
-                                .firstOrNull { offset.y.toInt() in it.offset until (it.offset + it.size) }?.key
+                            // The list must not have moved under the finger (scrolling, queue
+                            // update): the song at the release point must be the one pressed.
+                            val key = keyAt(offset.y)
+                            if (key == null || key != pressedKey) return@detectTapGestures
                             display.firstOrNull { keyOf(it) == key }?.let(player::skipTo)
                         },
                     )
@@ -457,7 +484,7 @@ private fun QueueList(
                     .zIndex(if (dragging) 1f else 0f)
                     .graphicsLayer { translationY = if (dragging) dragOffset else 0f }
                 if (entry.isCurrent) {
-                    QueueRow(entry, dragging, rowModifier)
+                    QueueRow(entry, dragging, isPlayable(entry.mediaId), rowModifier)
                 } else {
                     // Swipe left to remove the song from the queue.
                     val dismissState = rememberSwipeToDismissBoxState(
@@ -483,7 +510,7 @@ private fun QueueList(
                             }
                         },
                     ) {
-                        QueueRow(entry, dragging, Modifier)
+                        QueueRow(entry, dragging, isPlayable(entry.mediaId), Modifier)
                     }
                 }
             }
@@ -493,7 +520,7 @@ private fun QueueList(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun QueueRow(entry: PlayerConnection.QueueEntry, dragging: Boolean, modifier: Modifier) {
+private fun QueueRow(entry: PlayerConnection.QueueEntry, dragging: Boolean, playable: Boolean, modifier: Modifier) {
     Row(
         modifier
             .fillMaxWidth()
@@ -513,7 +540,8 @@ private fun QueueRow(entry: PlayerConnection.QueueEntry, dragging: Boolean, modi
                 val line = 1.dp.toPx()
                 drawRect(Separator, topLeft = Offset(0f, size.height - line), size = Size(size.width, line))
             }
-            .padding(horizontal = 12.dp),
+            .padding(horizontal = 12.dp)
+            .graphicsLayer { alpha = if (playable || entry.isCurrent) 1f else 0.4f },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (entry.isCurrent) {
@@ -537,6 +565,10 @@ private fun QueueRow(entry: PlayerConnection.QueueEntry, dragging: Boolean, modi
                 maxLines = 1,
                 modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE),
             )
+        }
+        if (!playable && !entry.isCurrent) {
+            Icon(Icons.Filled.CloudOff, contentDescription = "Not on the phone", tint = Gray, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
         }
         if (!entry.isCurrent) {
             Icon(Icons.Filled.DragHandle, contentDescription = null, tint = DimGray, modifier = Modifier.size(20.dp))
@@ -810,4 +842,13 @@ private fun PlaylistPicker(
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
+}
+
+/** Lets the element extend [horizontal] beyond its parent's side padding on both sides. */
+private fun Modifier.bleed(horizontal: Dp): Modifier = layout { measurable, constraints ->
+    val extra = (horizontal * 2).roundToPx()
+    val placeable = measurable.measure(
+        constraints.copy(minWidth = constraints.minWidth + extra, maxWidth = constraints.maxWidth + extra),
+    )
+    layout(placeable.width - extra, placeable.height) { placeable.place(-extra / 2, 0) }
 }
